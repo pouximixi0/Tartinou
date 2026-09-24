@@ -112,6 +112,8 @@ img { display: block; max-width: 100%; }
 .tab[aria-current="page"] { color: var(--accent); }
 .tab[aria-current="page"] svg { stroke-width: 2.25; }
 .tab:focus-visible { outline-offset: -4px; }
+/* Sur mobile, la marque et l'entrée Réglages vivent ailleurs (barre du haut). */
+.tabbar-brand, .tab-settings { display: none; }
 
 /* ---------- Écrans ---------- */
 main { display: block; outline: none; }
@@ -432,6 +434,69 @@ dialog.sheet-compact::before { content: ''; display: block; width: 36px; height:
 #toast-root { position: fixed; left: 16px; right: 16px; bottom: calc(var(--tabbar-h) + 14px + env(safe-area-inset-bottom)); z-index: 60; display: flex; justify-content: center; pointer-events: none; }
 .toast { background: var(--ink); color: var(--on-ink); padding: 10px 16px; border-radius: var(--r); font-weight: 500; font-size: 0.95rem; max-width: 480px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,.18); animation: toast-in 180ms ease-out; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Survol (souris et trackpad seulement) ---------- */
+@media (hover: hover) {
+  .btn-primary:hover { background: color-mix(in srgb, var(--ink) 88%, var(--paper)); }
+  .btn-secondary:hover, .btn-icon:hover, .key:hover, .stepper-btn:hover { background: var(--surface-2); }
+  .btn-validate:hover { background: color-mix(in srgb, var(--cuisine) 88%, black); }
+  .btn-danger:hover { background: color-mix(in srgb, var(--danger) 88%, black); }
+  .chip:not([aria-checked="true"]):hover { border-color: var(--ink-2); }
+  .expense-main:hover, .stock-main:hover, .meal:hover, .zone-title:hover { background: var(--surface-2); }
+  .tab:hover { color: var(--ink); }
+  .link:hover { text-decoration-color: currentColor; }
+  .input:hover { border-color: var(--ink-2); }
+}
+
+/* ---------- Écran large : barre latérale, contenu plus large ---------- */
+@media (min-width: 900px) {
+  :root { --sidebar-w: 236px; }
+  body { padding-bottom: 0; padding-left: var(--sidebar-w); }
+  .tabbar {
+    top: 0; right: auto; width: var(--sidebar-w); height: 100dvh; padding: 20px 12px;
+    display: flex; flex-direction: column; gap: 4px;
+    border-top: 0; border-right: 1px solid var(--line); background: var(--surface);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  .tabbar-brand {
+    display: flex; align-items: center; gap: 10px; padding: 6px 10px 18px; margin-bottom: 6px; border-bottom: 1px solid var(--line);
+    color: var(--ink); text-decoration: none; font-weight: 800; font-size: 1.15rem; letter-spacing: -0.03em;
+  }
+  .tabbar-brand img { width: 36px; height: 36px; border-radius: 9px; }
+  .tabbar-brand span::after { content: '.'; color: var(--budget); }
+  .tab { flex-direction: row; justify-content: flex-start; gap: 12px; padding: 0 12px; min-height: 44px; border-radius: var(--r); font-size: 0.95rem; font-weight: 500; color: var(--ink-2); }
+  .tab svg { width: 20px; height: 20px; }
+  .tab[aria-current="page"] { background: var(--paper); color: var(--ink); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+  .tab[aria-current="page"] svg { color: var(--accent); stroke-width: 2; }
+  .tab-settings { display: flex; margin-top: auto; }
+  .topbar { padding: 0 32px; min-height: 64px; background: var(--paper); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .topbar-title { font-size: 1.6rem; }
+  .topbar-settings { display: none; }
+  .screen { max-width: 820px; padding: 28px 32px 56px; gap: 24px; }
+  .screen-onboarding { max-width: 520px; }
+  .hero-amount { font-size: 4rem; }
+  .row-actions > .btn { flex: 0 1 auto; min-width: 200px; }
+  .btn-block.btn-tall { max-width: 420px; }
+  .mini-gauges { grid-template-columns: 1fr 1fr; }
+  .filters, .stock-filters { max-width: 560px; }
+  .chips-scroll { margin: 0; padding-left: 0; padding-right: 0; flex-wrap: wrap; }
+  #toast-root { left: calc(var(--sidebar-w) + 24px); right: 24px; bottom: 24px; }
+  dialog.sheet { width: 600px; }
+  .numpad { max-width: 360px; margin-left: auto; margin-right: auto; width: 100%; }
+  .amount-display { text-align: center; }
+}
+@media (min-width: 1180px) {
+  .screen { max-width: 960px; }
+  .stock-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+  .stock-group.is-urgent, .stock-group.is-ddm { grid-column: 1 / -1; }
+  .day-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  .screen-today { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); column-gap: 40px; align-content: start; }
+  .screen-today > .date-line { grid-column: 1; }
+  .screen-today > .hero, .screen-today > .mini-gauges, .screen-today > .empty { grid-column: 1; }
+  .screen-today > .stock-alert, .screen-today > .btn, .screen-today > .h-section, .screen-today > .expense-list, .screen-today > .empty-line, .screen-today > .streak { grid-column: 2; }
+  .screen-today > .btn { grid-row: 1 / span 2; align-self: start; margin-top: 30px; max-width: none; }
+  .screen-today > .stock-alert { grid-row: 3; }
+}
 
 /* ---------- Motion ---------- */
 @media (prefers-reduced-motion: reduce) {
