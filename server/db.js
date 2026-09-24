@@ -101,6 +101,7 @@ const COLUMNS = [
   ['recipes', 'share_id', 'TEXT'],
   ['recipes', 'lien', 'TEXT'],
   ['stock_journal', 'auteur', 'TEXT'],
+  ['settings', 'modules', "TEXT NOT NULL DEFAULT '{}'"],
 ];
 
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -160,6 +161,7 @@ export function readState(db) {
       allergenes: parse(s.allergenes, []),
       objectifs: parse(s.objectifs, {}),
       notifs: { actives: !!s.notif_actives, heure: s.notif_heure, dlc: !!s.notif_dlc, hebdo: !!s.notif_hebdo, mensuel: !!s.notif_mensuel, objectifs: !!s.notif_objectifs },
+      modules: parse(s.modules, {}),
     },
     categories: db.prepare('SELECT * FROM categories ORDER BY position, rowid').all().map((c) => ({ id: c.id, nom: c.nom, couleur: c.couleur })),
     expenses: db.prepare('SELECT * FROM expenses ORDER BY date, created_at').all().map((e) => ({ id: e.id, montant: e.montant, categorieId: e.categorie_id, note: e.note, date: e.date, createdAt: e.created_at, auteur: e.auteur })),
@@ -194,12 +196,12 @@ const writers = {
     const n = s.notifs || {};
     db.prepare(`UPDATE settings SET revenu_mensuel=?, epargne_visee=?, debut_mois=?, part_courses=?, budget_strict=?, theme=?, onboarded=?, created_at=?,
       stock_alert_days=?, stock_scan_continu=?, stock_vibration=?, stock_son=?, allergenes=?, objectifs=?,
-      notif_actives=?, notif_heure=?, notif_dlc=?, notif_hebdo=?, notif_mensuel=?, notif_objectifs=?, updated_at=? WHERE id = 1`)
+      notif_actives=?, notif_heure=?, notif_dlc=?, notif_hebdo=?, notif_mensuel=?, notif_objectifs=?, modules=?, updated_at=? WHERE id = 1`)
       .run(num(s.revenuMensuel), num(s.epargneVisee), Math.min(31, Math.max(1, int(s.debutMois, 1))), num(s.partCourses, 40), bool(s.budgetStrict),
         ['system', 'light', 'dark'].includes(s.theme) ? s.theme : 'system', bool(s.onboarded), nullable(str(s.createdAt)),
         Math.max(0, int(st.alertDays, 3)), bool(st.scanContinu ?? true), bool(st.vibration ?? true), bool(st.son ?? true),
         json(Array.isArray(s.allergenes) ? s.allergenes : [], []), json(s.objectifs && typeof s.objectifs === 'object' ? s.objectifs : {}, {}),
-        bool(n.actives ?? true), Math.min(23, Math.max(0, int(n.heure, 18))), bool(n.dlc ?? true), bool(n.hebdo ?? true), bool(n.mensuel ?? true), bool(n.objectifs ?? true), Date.now());
+        bool(n.actives ?? true), Math.min(23, Math.max(0, int(n.heure, 18))), bool(n.dlc ?? true), bool(n.hebdo ?? true), bool(n.mensuel ?? true), bool(n.objectifs ?? true), json(s.modules && typeof s.modules === 'object' ? s.modules : {}, {}), Date.now());
     db.exec('DELETE FROM charges_fixes');
     const ins = db.prepare('INSERT INTO charges_fixes (id, nom, montant, jour_du_mois, position) VALUES (?, ?, ?, ?, ?)');
     (Array.isArray(s.chargesFixes) ? s.chargesFixes : []).forEach((c, i) => ins.run(str(c.id), str(c.nom), num(c.montant), int(c.jourDuMois, 1), i));

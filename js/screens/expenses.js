@@ -6,6 +6,7 @@ import { computeBudget, recentCycles, sumBetween, dailyMaxFor, trackedEnveloppe 
 import { expenseList } from '../components/expense-row.js';
 import { openExpenseSheet } from '../components/expense-sheet.js';
 import { objectifsStatus } from '../finance.js';
+import { isOn } from '../modules.js';
 
 // Filtres conservés entre deux rendus.
 const filters = { cycle: 0, categorie: 'all' };
@@ -62,7 +63,7 @@ export function renderExpenses() {
       h('ul', { class: 'bars', 'aria-label': 'Répartition par catégorie' },
         sorted.map(([id, amount]) => {
           const cat = categoryById(id);
-          const obj = Number((state.settings.objectifs || {})[id]) || 0;
+          const obj = isOn('objectifs') ? Number((state.settings.objectifs || {})[id]) || 0 : 0;
           const ratio = obj ? amount / obj : 0;
           const cls = obj ? (ratio >= 1 ? ' is-depasse' : ratio >= 0.8 ? ' is-alerte' : '') : '';
           return h('li', { class: `bar-row${cls}` },

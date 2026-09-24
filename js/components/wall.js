@@ -5,6 +5,7 @@ import { h, icon, toast } from '../utils.js';
 import { getState, update, currentUser, syncStatus } from '../store.js';
 import { postMessage, activityFeed, relativeTime } from '../social.js';
 import { openDialog, confirmDialog } from './dialog.js';
+import { isOn } from '../modules.js';
 
 function messageRow(m, { compact = false } = {}) {
   const me = currentUser();
@@ -44,7 +45,7 @@ export function wallZone(state) {
   return h('section', { class: 'zone zone-open wall' },
     h('h2', { class: 'zone-title' }, 'Mur du foyer',
       h('span', { class: 'zone-tools' },
-        h('button', { type: 'button', class: 'link small', onclick: openActivity }, 'Activité'),
+        isOn('activite') ? h('button', { type: 'button', class: 'link small', onclick: openActivity }, 'Activité') : null,
         msgs.length > 3 ? h('button', { type: 'button', class: 'link small', onclick: openWall }, `Tout voir (${msgs.length})`) : null)),
     h('div', { class: 'zone-body' },
       shown.length ? h('ul', { class: 'wall-list' }, shown.map((m) => messageRow(m, { compact: true }))) : h('p', { class: 'muted small' }, 'Laisse un mot aux autres membres : il s’affiche ici et leur est envoyé en notification.'),

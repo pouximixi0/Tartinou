@@ -11,6 +11,7 @@ import { renderStock } from './js/screens/stock.js';
 import { renderSettings } from './js/screens/settings.js';
 import { renderOnboarding } from './js/screens/onboarding.js';
 import { renderLogin } from './js/screens/login.js';
+import { isOn } from './js/modules.js';
 
 // Un écran, une couleur d'accent : budget = moutarde, cuisine = vert.
 const ROUTES = {
@@ -32,7 +33,9 @@ let lastRoute = null;
 
 function currentRoute() {
   const key = location.hash.replace(/^#\/?/, '');
-  return ROUTES[key] ? key : 'aujourdhui';
+  if (!ROUTES[key]) return 'aujourdhui';
+  if (['menus', 'courses', 'stock'].includes(key) && !isOn(key)) return 'aujourdhui';
+  return key;
 }
 
 function applyTheme(theme) {
@@ -75,10 +78,16 @@ function render() {
   document.body.dataset.accent = route.accent;
   document.title = `${route.title} · Tartinou`;
   main.replaceChildren(route.render());
+  let visible = 0;
   for (const tab of tabbar.querySelectorAll('.tab')) {
-    if (tab.dataset.route === key) tab.setAttribute('aria-current', 'page');
+    const r = tab.dataset.route;
+    const off = ['menus', 'courses', 'stock'].includes(r) && !isOn(r);
+    tab.hidden = off;
+    if (!off && !tab.classList.contains('tab-settings')) visible++;
+    if (r === key) tab.setAttribute('aria-current', 'page');
     else tab.removeAttribute('aria-current');
   }
+  tabbar.style.setProperty('--tabs', String(visible));
   settingsLink.setAttribute('aria-current', key === 'reglages' ? 'page' : 'false');
   // Même écran re-rendu après une action : on garde la position de défilement.
   window.scrollTo(0, key === lastRoute ? y : 0);

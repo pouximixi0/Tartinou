@@ -33,13 +33,14 @@ export function openInventorySheet() {
     const item = current();
     if (!item) return finish();
     const info = dlcInfo(item, st.alertDays);
+    const product = item.code ? getState().stock.products[item.code] : null;
     const qty = stepper({ value: item.qte, step: uniteById(item.unite).step, min: 0, label: item.nom, format: (v) => fmtQte({ ...item, conditionnement: '', qte: v }) });
     card.replaceChildren(
       h('p', { class: 'h-section' }, emplacementById(item.emplacement).nom),
       item.image ? h('img', { class: 'inv-thumb', src: item.image, alt: '' }) : h('span', { class: 'inv-thumb stock-thumb-empty' }, icon('box')),
       h('h3', { class: 'inv-name' }, item.nom),
       h('p', { class: 'muted' }, [item.marque, item.conditionnement].filter(Boolean).join(' · ')),
-      h('span', { class: `dlc-badge dlc-${info.status}` }, dlcLabel(item, info)),
+      h('span', { class: 'badges' }, product && product.nutriscore ? h('span', { class: `score-mini score-${product.nutriscore}` }, `Nutri-Score ${product.nutriscore.toUpperCase()}`) : null, h('span', { class: `dlc-badge dlc-${info.status}` }, dlcLabel(item, info))),
       h('div', { class: 'inv-qty' }, h('span', { class: 'label' }, 'Quantité constatée'), qty),
       h('div', { class: 'row-actions' },
         h('button', { type: 'button', class: 'btn btn-secondary', onclick: async () => {

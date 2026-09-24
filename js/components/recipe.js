@@ -5,6 +5,7 @@ import { getState, update } from '../store.js';
 import { openDialog } from './dialog.js';
 import { openCookDialog } from './cook-dialog.js';
 import { stepper } from './stepper.js';
+import { isOn } from '../modules.js';
 
 export const mealLabel = (jour, moment) => `${capitalize(jour)} ${moment}`;
 
@@ -69,7 +70,7 @@ export function openRecipe(week, jour, moment) {
     cls: 'sheet-compact',
     content: [
       h('p', { class: 'muted' }, `${mealLabel(jour, moment)} · ${meal.temps} min${tags}`, cooked ? h('span', { class: 'tag-stock' }, 'cuisiné') : null),
-      meal.lien ? sourceLink(meal.lien) : null,
+      meal.lien && isOn('liensRecettes') ? sourceLink(meal.lien) : null,
       ingredients.length
         ? h('section', null,
             h('div', { class: 'recipe-head' }, h('h3', { class: 'h-small' }, 'Ingrédients'), pers),
@@ -83,8 +84,8 @@ export function openRecipe(week, jour, moment) {
           : h('p', null, meal.recette)),
     ],
     actions: [
-      h('button', { type: 'button', class: 'btn btn-secondary', onclick: favorite, disabled: isFav }, icon('check'), isFav ? 'Favori' : 'Favoris'),
-      h('button', { type: 'button', class: 'btn btn-primary', onclick: cook }, icon('pot'), cooked ? 'Cuisiné à nouveau' : 'J’ai cuisiné ce plat'),
+      isOn('favoris') ? h('button', { type: 'button', class: 'btn btn-secondary', onclick: favorite, disabled: isFav }, icon('check'), isFav ? 'Favori' : 'Favoris') : null,
+      isOn('cuisine') ? h('button', { type: 'button', class: 'btn btn-primary', onclick: cook }, icon('pot'), cooked ? 'Cuisiné à nouveau' : 'J’ai cuisiné ce plat') : null,
     ],
   });
 }
@@ -97,7 +98,7 @@ export function openFavoriteRecipe(recipe, { onPlan } = {}) {
     cls: 'sheet-compact',
     content: [
       h('p', { class: 'muted' }, `${recipe.temps || '?'} min${recipe.tags?.length ? ` · ${recipe.tags.join(', ')}` : ''} · ${recipe.personnes || 2} pers.`),
-      recipe.lien ? sourceLink(recipe.lien) : null,
+      recipe.lien && isOn('liensRecettes') ? sourceLink(recipe.lien) : null,
       recipe.ingredients?.length ? h('section', null, h('h3', { class: 'h-small' }, 'Ingrédients'), h('ul', { class: 'plain-list' }, recipe.ingredients.map((c) => h('li', null, `${c.article}${c.quantite ? ` · ${c.quantite}` : ''}`)))) : null,
       h('section', null, h('h3', { class: 'h-small' }, 'Recette'), steps.length > 1 ? h('ol', { class: 'steps' }, steps.map((s) => h('li', null, s.replace(/^\d+[.)]\s*/, '')))) : h('p', null, recipe.recette || '')),
     ],

@@ -8,6 +8,7 @@ import { findInStock } from '../stock.js';
 import { openRangerSheet } from '../components/ranger-sheet.js';
 import { aRacheterZone } from './stock.js';
 import { shareText, shoppingListText } from '../share.js';
+import { isOn } from '../modules.js';
 
 export function renderShopping() {
   const week = currentWeek();
@@ -16,7 +17,7 @@ export function renderShopping() {
     root.append(h('div', { class: 'empty' },
       h('p', null, 'Pas encore de liste de courses : elle se remplit à partir du menu de la semaine.'),
       h('a', { class: 'btn btn-primary', href: '#menus' }, 'Importer un menu')));
-    root.append(aRacheterZone(getState()));
+    if (isOn('aRacheter') && isOn('stock')) root.append(aRacheterZone(getState()));
     return root;
   }
   const frozen = !!week.validation;
@@ -33,10 +34,10 @@ export function renderShopping() {
       frozen ? h('p', { class: 'validated-line' }, `Courses validées le ${fmtDate(week.validation.date, { day: 'numeric', month: 'long' })} : ticket `, h('span', { class: 'num' }, money(week.validation.montantReel)), ' pour ', h('span', { class: 'num' }, money(week.validation.estime)), ' estimés.') : null),
   );
 
-  root.append(h('div', { class: 'row-actions' },
+  if (isOn('partage')) root.append(h('div', { class: 'row-actions' },
     h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => shareText({ title: 'Liste de courses', text: shoppingListText(week, items) }) }, icon('share'), 'Partager la liste')));
 
-  if (frozen && !week.rangeAt) {
+  if (frozen && !week.rangeAt && isOn('stock')) {
     root.append(h('button', { type: 'button', class: 'btn btn-secondary btn-block', onclick: () => rangerCourses(week, items) }, icon('box'), 'Ranger les courses dans le stock'));
   }
 
@@ -58,7 +59,7 @@ export function renderShopping() {
       h('button', { type: 'button', class: 'btn btn-validate btn-block btn-tall', onclick: () => validate(week, totalChecked, items) }, icon('check'), 'Valider les courses'),
     );
   }
-  root.append(aRacheterZone(getState()));
+  if (isOn('aRacheter') && isOn('stock')) root.append(aRacheterZone(getState()));
   return root;
 }
 
@@ -104,7 +105,7 @@ function itemRow(week, it, frozen) {
         h('span', { class: 'shop-name' }, it.article),
         it.quantite ? h('span', { class: 'muted small' }, ` · ${it.quantite}`) : null,
         unavailable ? h('span', { class: 'tag-unavailable' }, 'introuvable') : null,
-        isChecked ? null : stockTag(it)),
+        isChecked || !isOn('tagEnStock') || !isOn('stock') ? null : stockTag(it)),
       h('span', { class: 'num shop-price' }, money(it.prix_estime))),
     h('div', { class: 'shop-sub' },
       it.pour.length ? h('button', { type: 'button', class: 'link small', onclick: () => showMeals(week, it) }, `pour : ${it.pour.join(', ')}`) : h('span', { class: 'muted small' }, it.manual ? 'ajouté à la main' : ''),
@@ -206,6 +207,6 @@ function validate(week, estime, items) {
     });
     dlg.close();
     toast(`Ticket de ${money(reel)} enregistré dans tes dépenses`);
-    rangerCourses(week, items);
+    if (isOn('rangerApresTicket') && isOn('stock')) rangerCourses(week, items);
   }
 }

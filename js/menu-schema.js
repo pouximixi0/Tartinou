@@ -144,7 +144,7 @@ function normalize(obj) {
 }
 
 /** Assemble le prompt à coller dans Claude. `ecartLine` est optionnelle. */
-export function buildPrompt(form, budget, ecartLine, extraLines = []) {
+export function buildPrompt(form, budget, ecartLine, extraLines = [], opts = {}) {
   const lundi = nextMonday(todayISO());
   const dateLundi = fmtDate(lundi, { day: 'numeric', month: 'long', year: 'numeric' });
   const repas = (MEAL_OPTIONS.find((o) => o.id === form.repas) || MEAL_OPTIONS[0]).phrase;
@@ -169,7 +169,7 @@ export function buildPrompt(form, budget, ecartLine, extraLines = []) {
     '- La somme des prix_estime de la liste de courses ne doit pas dépasser le budget.',
     '- Chaque article de la liste de courses indique dans "pour" les repas qui l\'utilisent.',
     '- Les recettes sont courtes : 3 à 6 étapes, sans blabla.',
-    '- Pour chaque repas, mets dans "lien" l\'adresse d\'une recette en ligne qui correspond vraiment (Marmiton, 750g, Cuisine AZ, Journal des Femmes…), uniquement si tu es sûr qu\'elle existe ; sinon null.',
+    opts.liens === false ? '- Laisse "lien" à null.' : '- Pour chaque repas, mets dans "lien" l\'adresse d\'une recette en ligne qui correspond vraiment (Marmiton, 750g, Cuisine AZ, Journal des Femmes…), uniquement si tu es sûr qu\'elle existe ; sinon null.',
     '',
     'Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ni après, sans balises markdown, en respectant exactement ce schéma :',
     '',

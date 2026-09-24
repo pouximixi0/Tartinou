@@ -2,6 +2,7 @@
 import { h, icon, money, toast } from '../utils.js';
 import { categoryById, update, syncStatus } from '../store.js';
 import { openExpenseSheet } from './expense-sheet.js';
+import { isOn } from '../modules.js';
 
 export function expenseRow(e) {
   const cat = categoryById(e.categorieId);
@@ -22,7 +23,7 @@ export function expenseRow(e) {
 }
 
 /** Le prénom de l'auteur n'a d'intérêt qu'à plusieurs dans le foyer. */
-const showAuthor = (e) => !!e.auteur && (syncStatus().foyer?.membres?.length || 1) > 1;
+const showAuthor = (e) => isOn('auteurDepenses') && !!e.auteur && (syncStatus().foyer?.membres?.length || 1) > 1;
 
 export function expenseList(expenses) {
   return h('ul', { class: 'expense-list' }, expenses.map(expenseRow));

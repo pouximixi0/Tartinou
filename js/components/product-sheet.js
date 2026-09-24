@@ -10,6 +10,7 @@ import { confirmDialog } from './dialog.js';
 import { openWasteDialog } from './waste-dialog.js';
 import { stepper } from './stepper.js';
 import { scanOnce } from '../scanner.js';
+import { isOn } from '../modules.js';
 
 const DLC_SHORTCUTS = [['Sans', null], ['+3 j', 3], ['+1 sem', 7], ['+1 mois', 30], ['+3 mois', 90], ['+6 mois', 180], ['+1 an', 365]];
 
@@ -109,7 +110,7 @@ export function openProductSheet({ code = null, product = null, item = null, def
   const portionsInput = h('input', { type: 'number', id: 'pr-portions', class: 'input', inputmode: 'decimal', min: '0', step: '1', placeholder: 'Ex. 4', value: d.portions != null ? String(d.portions) : '' });
   const insightLine = h('p', { class: 'muted small price-insight', hidden: true });
   function drawInsight() {
-    const ins = priceInsight(getState(), { code: d.code, nom: nomInput.value.trim() || d.nom });
+    const ins = isOn('prixHistorique') ? priceInsight(getState(), { code: d.code, nom: nomInput.value.trim() || d.nom }) : null;
     insightLine.hidden = !ins;
     if (!ins) return;
     const parts = [`Dernier prix : ${money(ins.last.prix)}${ins.last.magasin ? ` chez ${ins.last.magasin}` : ''} le ${fmtDate(ins.last.date, { day: 'numeric', month: 'short' })}`];
@@ -121,7 +122,7 @@ export function openProductSheet({ code = null, product = null, item = null, def
   nomInput.addEventListener('input', drawInsight);
   const allergenLine = h('p', { class: 'allergen-line', hidden: true });
   function drawAllergens() {
-    const conflicts = allergenConflicts(getState(), currentProduct);
+    const conflicts = isOn('allergenes') ? allergenConflicts(getState(), currentProduct) : [];
     allergenLine.hidden = !conflicts.length;
     if (conflicts.length) allergenLine.replaceChildren(h('span', { class: 'tag-allergene' }, icon('alert'), `Contient : ${conflicts.join(', ')}`), ' ', h('span', { class: 'muted small' }, 'allergène déclaré dans ton foyer.'));
   }
@@ -149,6 +150,7 @@ export function openProductSheet({ code = null, product = null, item = null, def
     if (p.ecoscore) scores.push(h('span', { class: `score score-${p.ecoscore}` }, 'Éco-Score ', h('strong', null, p.ecoscore.toUpperCase())));
     const n = p.nutriments;
     const nut = n ? [['Énergie', n.kcal, 'kcal'], ['Lipides', n.lipides, 'g'], ['dont saturés', n.satures, 'g'], ['Glucides', n.glucides, 'g'], ['dont sucres', n.sucres, 'g'], ['Fibres', n.fibres, 'g'], ['Protéines', n.proteines, 'g'], ['Sel', n.sel, 'g']].filter((r) => r[1] != null) : [];
+    if (!isOn('nutriscore')) scores.length = 0;
     if (!scores.length && !p.allergenes.length && !p.ingredients && !nut.length) return;
     details.append(h('details', { class: 'zone' },
       h('summary', { class: 'zone-title' }, 'Infos produit (Open Food Facts)'),
@@ -301,7 +303,7 @@ export function openProductSheet({ code = null, product = null, item = null, def
       codeLine,
       existingLine,
       h('div', { class: 'field' }, h('label', { for: 'pr-unite' }, 'Quantité'), h('div', { class: 'qty-row' }, qty, uniteSelect)),
-      h('div', { class: 'field-row' }, h('div', { class: 'field' }, prixLabelEl, prixInput), h('div', { class: 'field' }, h('label', { for: 'pr-magasin' }, 'Magasin'), magasinInput, storesList)),
+      h('div', { class: 'field-row' }, h('div', { class: 'field' }, prixLabelEl, prixInput), isOn('prixHistorique') ? h('div', { class: 'field' }, h('label', { for: 'pr-magasin' }, 'Magasin'), magasinInput, storesList) : null),
       prixHint,
       insightLine,
       h('div', { class: 'field' }, h('span', { class: 'label' }, 'Emplacement'), empChips),
@@ -311,7 +313,7 @@ export function openProductSheet({ code = null, product = null, item = null, def
         h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => quick('jete') }, icon('trash'), 'Jeté'),
         h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: toggleOpen }, item.ouvertLe ? `Ouvert le ${fmtDate(item.ouvertLe, { day: 'numeric', month: 'short' })}` : 'Ouvert aujourd’hui'),
         h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: toBuy }, icon('basket'), 'À racheter'),
-        h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => printLabels([item]).catch((e) => toast(e.message)) }, icon('image'), 'Étiquette QR')) : null,
+        isOn('etiquettesQR') ? h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => printLabels([item]).catch((e) => toast(e.message)) }, icon('image'), 'Étiquette QR') : null) : null,
       h('details', { class: 'zone', open: editing && (d.seuilMin > 0 || !!d.notes) },
         h('summary', { class: 'zone-title' }, 'Plus d’options'),
         h('div', { class: 'zone-body' },
@@ -319,7 +321,7 @@ export function openProductSheet({ code = null, product = null, item = null, def
             h('div', { class: 'field' }, h('label', { for: 'pr-cat' }, 'Catégorie'), catSelect),
             h('div', { class: 'field' }, h('label', { for: 'pr-seuil' }, 'Stock minimum'), seuilInput)),
           h('p', { class: 'muted small' }, 'Sous le stock minimum, le produit passe tout seul dans « À racheter ».'),
-          h('div', { class: 'field' }, h('label', { for: 'pr-portions' }, 'Portions restantes (produit entamé)'), portionsInput),
+          isOn('portions') ? h('div', { class: 'field' }, h('label', { for: 'pr-portions' }, 'Portions restantes (produit entamé)'), portionsInput) : null,
           h('div', { class: 'field' }, h('label', { for: 'pr-notes' }, 'Notes'), notesInput))),
       details,
       err),

@@ -9,6 +9,7 @@ import { canInstall, promptInstall, onInstallable, isIOS, isStandalone } from '.
 import { detectRecurring, parseBankCsv, matchBankRows, guessCategoryId } from '../finance.js';
 import { pushSupported, isStandaloneIOS, currentSubscription, subscribeDevice, unsubscribeDevice } from '../push.js';
 import { shareText, inviteUrl } from '../share.js';
+import { MODULE_GROUPS, isOn } from '../modules.js';
 
 export const ALLERGENES = ['lait', 'gluten', 'œufs', 'fruits à coque', 'arachides', 'soja', 'poisson', 'crustacés', 'mollusques', 'céleri', 'moutarde', 'sésame', 'sulfites', 'lupin'];
 
@@ -63,7 +64,7 @@ export function renderSettings() {
     update((st) => { st.settings.chargesFixes.push({ id: uid(), nom, montant, jourDuMois: jour }); });
     toast('Charge ajoutée');
   }
-  const recurring = detectRecurring(state.expenses, s.chargesFixes);
+  const recurring = isOn('recurrences') ? detectRecurring(state.expenses, s.chargesFixes) : [];
   root.append(zone('Charges fixes',
     s.chargesFixes.length
       ? h('ul', { class: 'rows' }, s.chargesFixes.map((c) =>
@@ -111,7 +112,7 @@ export function renderSettings() {
       h('li', { class: 'row-item row-cat' },
         h('input', { type: 'color', class: 'color', value: cat.couleur, 'aria-label': `Couleur de ${cat.nom}`, onchange: (ev) => update((st) => { st.categories.find((c) => c.id === cat.id).couleur = ev.target.value; }, { quiet: true }) }),
         h('input', { type: 'text', class: 'input', value: cat.nom, maxlength: '30', 'aria-label': 'Nom de la catégorie', onchange: (ev) => { const v = ev.target.value.trim() || cat.nom; ev.target.value = v; update((st) => { st.categories.find((c) => c.id === cat.id).nom = v; }, { quiet: true }); } }),
-        h('input', { type: 'text', class: 'input input-objectif num', inputmode: 'decimal', placeholder: 'Objectif €', 'aria-label': `Objectif pour ${cat.nom}`, value: s.objectifs[cat.id] ? String(s.objectifs[cat.id]).replace('.', ',') : '',
+        !isOn('objectifs') ? null : h('input', { type: 'text', class: 'input input-objectif num', inputmode: 'decimal', placeholder: 'Objectif €', 'aria-label': `Objectif pour ${cat.nom}`, value: s.objectifs[cat.id] ? String(s.objectifs[cat.id]).replace('.', ',') : '',
           onchange: (ev) => { const v = parseAmount(ev.target.value); update((st) => { if (v > 0) st.settings.objectifs[cat.id] = v; else delete st.settings.objectifs[cat.id]; }, { quiet: true }); ev.target.value = v > 0 ? String(v).replace('.', ',') : ''; } }),
         h('button', { type: 'button', class: 'btn-icon', 'aria-label': `Supprimer ${cat.nom}`, disabled: cat.id === 'autre', onclick: () => deleteCategory(cat) }, icon('trash'))))),
     h('button', { type: 'button', class: 'btn btn-secondary btn-block', onclick: () => { update((st) => { st.categories.push({ id: uid(), nom: 'Nouvelle catégorie', couleur: '#64748B' }); }); setTimeout(() => { const inputs = document.querySelectorAll('.screen-settings .row-cat input[type=text]:not(.input-objectif)'); const last = inputs[inputs.length - 1]; last?.focus(); last?.select(); }, 0); } }, icon('plus'), 'Ajouter une catégorie'),
@@ -191,9 +192,17 @@ export function renderSettings() {
       fileInput,
       h('label', { for: 'import-file', class: 'btn btn-secondary' }, 'Importer une sauvegarde')),
     h('p', { class: 'muted small' }, 'Relevé bancaire : importe le CSV de ta banque pour retrouver les dépenses oubliées. Chaque ligne est rapprochée d’une dépense saisie (même montant, à trois jours près) ; les autres te sont proposées.'),
-    csvInput,
-    h('label', { for: 'import-csv', class: 'btn btn-secondary btn-block' }, icon('list'), 'Importer un relevé CSV'),
+    isOn('releveCsv') ? csvInput : null,
+    isOn('releveCsv') ? h('label', { for: 'import-csv', class: 'btn btn-secondary btn-block' }, icon('list'), 'Importer un relevé CSV') : null,
     h('button', { type: 'button', class: 'btn btn-danger-outline btn-block', onclick: eraseAll }, 'Effacer toutes les données'),
+  ));
+
+  /* ---- Fonctions et affichage ---- */
+  root.append(zone('Fonctions et affichage',
+    h('p', { class: 'muted small' }, 'Coupe ce dont tu ne te sers pas : l’écran ou le bouton disparaît, les données restent.'),
+    ...MODULE_GROUPS.map((g) => h('div', { class: 'module-group' },
+      h('p', { class: 'label' }, g.titre),
+      ...g.items.map(([key, label, hint]) => switchRow(label, hint, isOn(key), (v) => update((st) => { st.settings.modules[key] = v; }))))),
   ));
 
   /* ---- Thème ---- */
@@ -294,7 +303,7 @@ function accountZone() {
         try { await api('DELETE', `/members/${m.id}`); await refreshMe(); drawFoyer(); toast(`${m.nom} retiré du foyer`); } catch (e) { toast(e.message); }
       } }, icon('trash')) : null)));
     codeLine.replaceChildren(...(f.codeInvitation
-      ? ['Code d’invitation : ', h('strong', { class: 'num code-invit' }, f.codeInvitation), ' ', h('button', { type: 'button', class: 'link small', onclick: () => shareText({ title: 'Rejoins mon foyer sur Tartinou', text: `Rejoins mon foyer « ${f.nom} » sur Tartinou avec le code ${f.codeInvitation}.`, url: inviteUrl(f.codeInvitation) }) }, icon('share'), 'partager le lien')]
+      ? ['Code d’invitation : ', h('strong', { class: 'num code-invit' }, f.codeInvitation), ' ', !isOn('partage') ? null : h('button', { type: 'button', class: 'link small', onclick: () => shareText({ title: 'Rejoins mon foyer sur Tartinou', text: `Rejoins mon foyer « ${f.nom} » sur Tartinou avec le code ${f.codeInvitation}.`, url: inviteUrl(f.codeInvitation) }) }, icon('share'), 'partager le lien')]
       : ['Le code d’invitation est visible par l’administrateur du foyer.']));
   }
   drawFoyer();

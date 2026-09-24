@@ -9,6 +9,7 @@ import { stockPromptLines } from '../stock.js';
 import { openTonightSheet } from '../components/tonight-sheet.js';
 import { putMealInWeek, todayDayName } from '../planning.js';
 import { shareText, menuText, recipeText, recipeUrl, newShareId } from '../share.js';
+import { isOn } from '../modules.js';
 
 const ui = { importText: '', importErrors: [] };
 
@@ -26,13 +27,13 @@ export function renderMenus() {
   else root.append(h('p', { class: 'empty-line muted' }, 'Pas encore de menu cette semaine. ', h('a', { class: 'link', href: '#prompt-form' }, 'Générer le prompt.')));
 
   root.append(
-    h('button', { type: 'button', class: 'btn btn-primary btn-block btn-tall', onclick: openTonightSheet }, icon('pot'), 'Que cuisiner ce soir ?'),
+    isOn('ceSoir') ? h('button', { type: 'button', class: 'btn btn-primary btn-block btn-tall', onclick: openTonightSheet }, icon('pot'), 'Que cuisiner ce soir ?') : null,
     promptZone(state, b), importZone(state, week));
   if (week) root.append(weekZone(week));
   root.append(h('div', { class: 'row-actions' },
     h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => openHistory() }, icon('clock'), 'Historique'),
-    week ? h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => shareText({ title: 'Menus de la semaine', text: menuText(week) }) }, icon('share'), 'Partager le menu') : null));
-  root.append(favoritesZone(state));
+    week && isOn('partage') ? h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => shareText({ title: 'Menus de la semaine', text: menuText(week) }) }, icon('share'), 'Partager le menu') : null));
+  if (isOn('favoris')) root.append(favoritesZone(state));
   return root;
 }
 
@@ -54,8 +55,8 @@ function promptZone(state, b) {
     const sl = stockPromptLines(getState());
     const pf = getState().promptForm;
     const restes = pf.restesDabord ? restesLine(getState()) : null;
-    const favs = getState().recettes.length ? `Recettes que j'aime déjà, à réutiliser si elles collent : ${getState().recettes.slice(0, 12).map((r) => r.nom).join(', ')}.` : null;
-    const text = buildPrompt(pf, budgetInput.value || autoBudget, ecartLineFor(lastValidatedWeek(getState())), [sl.urgentLine, sl.ddmLine, restes, favs]);
+    const favs = isOn('favoris') && getState().recettes.length ? `Recettes que j'aime déjà, à réutiliser si elles collent : ${getState().recettes.slice(0, 12).map((r) => r.nom).join(', ')}.` : null;
+    const text = buildPrompt(pf, budgetInput.value || autoBudget, ecartLineFor(lastValidatedWeek(getState())), [sl.urgentLine, sl.ddmLine, restes, favs], { liens: isOn('liensRecettes') });
     try {
       await navigator.clipboard.writeText(text);
       toast('Prompt copié. Colle-le dans Claude.');
@@ -299,7 +300,7 @@ function favoritesZone(state) {
         ? h('ul', { class: 'rows' }, list.map((r) => h('li', { class: 'row-item' },
             h('button', { type: 'button', class: 'row-text link-plain', onclick: () => openFavoriteRecipe(r, { onPlan: plan }) }, r.nom, h('span', { class: 'muted small block' }, `${r.temps || '?'} min · ${(r.ingredients || []).length} ingrédient${(r.ingredients || []).length > 1 ? 's' : ''}${r.tags?.length ? ` · ${r.tags.slice(0, 3).join(', ')}` : ''}`)),
             h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => plan(r) }, 'Au menu'),
-            h('button', { type: 'button', class: 'btn-icon', 'aria-label': `Partager ${r.nom}`, onclick: () => shareRecipe(r) }, icon('share')),
+            isOn('partage') ? h('button', { type: 'button', class: 'btn-icon', 'aria-label': `Partager ${r.nom}`, onclick: () => shareRecipe(r) }, icon('share')) : null,
             h('button', { type: 'button', class: 'btn-icon', 'aria-label': `Retirer ${r.nom} des favoris`, onclick: async () => { const ok = await confirmDialog({ title: `Retirer « ${r.nom} » ?`, message: 'La recette disparaît des favoris.', confirmLabel: 'Retirer', danger: true }); if (ok) update((s) => { s.recettes = s.recettes.filter((x) => x.id !== r.id); }); } }, icon('trash')))))
         : h('p', { class: 'muted small' }, 'Depuis une fiche recette, « Favoris » la garde ici pour la remettre au menu en un geste, sans repasser par le prompt.')));
 }

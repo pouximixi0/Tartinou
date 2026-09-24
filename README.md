@@ -28,7 +28,7 @@ Le serveur sert aussi les fichiers de l'app. Pour tester le rendu mobile, utilis
 
 Icônes : `icons/icon-1024.png` est le logo source (fond marine) ; les tailles 512, 192 et 180 (Apple) en sont dérivées. `npm run icons` régénère les anciennes icônes géométriques si besoin.
 
-## Déployer sur le serveur (life.pouximixi.fr)
+## Déployer sur le serveur (tartinou.pouximixi.fr)
 
 nginx sert les fichiers statiques et relaie `/api/` vers le service Node (port 3311, données dans `/var/lib/foyer/` : `accounts.db` pour les comptes, `foyers/<id>.db` par foyer). Le code serveur (`FOYER_TOKEN` dans `/etc/foyer.env`) n'est demandé que pour créer un nouveau foyer après le premier ; rejoindre un foyer existant passe par son code d'invitation.
 

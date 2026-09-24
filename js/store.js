@@ -5,6 +5,7 @@
 import { todayISO } from './utils.js';
 import { api, getToken, setToken, getClientId } from './api.js';
 import { setActor } from './stock.js';
+import { defaultModules, isOn } from './modules.js';
 
 export const STORAGE_KEY = 'foyer:v2';
 const LEGACY_KEY = 'foyer:v1';
@@ -38,6 +39,7 @@ export function defaultState() {
       allergenes: [],
       objectifs: {},
       notifs: { actives: true, heure: 18, dlc: true, hebdo: true, mensuel: true, objectifs: true },
+      modules: defaultModules(),
     },
     categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
     expenses: [],
@@ -70,6 +72,7 @@ export function migrate(raw) {
   out.settings = { ...base.settings, ...(s.settings || {}) };
   out.settings.stock = { ...base.settings.stock, ...((s.settings && s.settings.stock) || {}) };
   out.settings.notifs = { ...base.settings.notifs, ...((s.settings && s.settings.notifs) || {}) };
+  out.settings.modules = { ...defaultModules(), ...((s.settings && s.settings.modules) || {}) };
   if (!Array.isArray(out.settings.allergenes)) out.settings.allergenes = [];
   if (!out.settings.objectifs || typeof out.settings.objectifs !== 'object') out.settings.objectifs = {};
   out.menus = { ...base.menus, ...(s.menus || {}) };
@@ -276,7 +279,7 @@ export async function initStore() {
   setSync(sync.pending.size ? 'syncing' : 'synced');
   emit();
   if (sync.pending.size) scheduleFlush(0);
-  startLive();
+  if (isOn('tempsReel', state)) startLive();
   return sync;
 }
 async function flushNow() {

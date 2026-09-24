@@ -11,6 +11,7 @@ import { openProductSheet } from '../components/product-sheet.js';
 import { openWasteDialog } from '../components/waste-dialog.js';
 import { openDialog } from '../components/dialog.js';
 import { stepper } from '../components/stepper.js';
+import { isOn } from '../modules.js';
 
 // Filtres conservés entre deux rendus.
 const ui = { q: '', emplacement: 'tous', tri: 'dlc' };
@@ -32,11 +33,11 @@ export function renderStock() {
     h('div', { class: 'stock-head' },
       h('h1', { class: `lead${sum.perimes ? ' is-over' : ''}` }, items.length ? [h('span', { class: 'num' }, String(items.length)), ` produit${items.length > 1 ? 's' : ''} en stock`] : 'Ton stock est vide'),
       h('p', { class: 'muted' }, parts.length ? parts.join(' · ') : items.length ? 'Rien ne presse : aucune date limite proche.' : 'Scanne tes courses en les rangeant, le reste suit.'),
-      val.avecPrix ? h('p', { class: 'muted small' }, 'Valeur du stock : ', h('strong', { class: 'num' }, money(val.total)), val.sansPrix ? ` (${val.sansPrix} produit${val.sansPrix > 1 ? 's' : ''} sans prix)` : '') : null),
+      val.avecPrix && isOn('valeurStock') ? h('p', { class: 'muted small' }, 'Valeur du stock : ', h('strong', { class: 'num' }, money(val.total)), val.sansPrix ? ` (${val.sansPrix} produit${val.sansPrix > 1 ? 's' : ''} sans prix)` : '') : null),
     h('div', { class: 'row-actions' },
       h('button', { type: 'button', class: 'btn btn-primary btn-tall', onclick: () => startScan() }, icon('camera'), 'Scanner un produit'),
       h('button', { type: 'button', class: 'btn btn-secondary btn-tall', onclick: () => openProductSheet({}) }, icon('plus'), 'À la main'),
-      items.length ? h('button', { type: 'button', class: 'btn btn-secondary btn-tall', onclick: openInventorySheet }, icon('check'), 'Rangement') : null),
+      items.length && isOn('rangement') ? h('button', { type: 'button', class: 'btn btn-secondary btn-tall', onclick: openInventorySheet }, icon('check'), 'Rangement') : null),
   );
 
   if (!items.length) {
@@ -93,7 +94,8 @@ export function renderStock() {
     root.append(listRoot);
   }
 
-  root.append(aRacheterZone(state), antiGaspiZone(state));
+  if (isOn('aRacheter')) root.append(aRacheterZone(state));
+  if (isOn('antiGaspi')) root.append(antiGaspiZone(state));
   return root;
 }
 
@@ -104,8 +106,10 @@ function itemRow(item, st) {
   const thumb = item.image
     ? h('img', { class: 'stock-thumb', src: item.image, alt: '', loading: 'lazy', onerror: (ev) => ev.target.replaceWith(h('span', { class: 'stock-thumb stock-thumb-empty' }, icon('box'))) })
     : h('span', { class: 'stock-thumb stock-thumb-empty' }, icon('box'));
-  const meta = [item.marque, item.conditionnement && item.unite === 'piece' ? item.conditionnement : '', item.ouvertLe ? 'ouvert' : '', item.portions != null ? `${item.portions} portion${item.portions > 1 ? 's' : ''}` : '', item.magasin || ''].filter(Boolean).join(' · ');
-  const conflicts = allergenConflicts(getState(), item.code ? getState().stock.products[item.code] : null);
+  const meta = [item.marque, item.conditionnement && item.unite === 'piece' ? item.conditionnement : '', item.ouvertLe ? 'ouvert' : '', isOn('portions') && item.portions != null ? `${item.portions} portion${item.portions > 1 ? 's' : ''}` : '', isOn('prixHistorique') ? item.magasin || '' : ''].filter(Boolean).join(' · ');
+  const product = item.code ? getState().stock.products[item.code] : null;
+  const conflicts = isOn('allergenes') ? allergenConflicts(getState(), product) : [];
+  const nutri = isOn('nutriscore') && product && product.nutriscore ? h('span', { class: `score-mini score-${product.nutriscore}`, title: `Nutri-Score ${product.nutriscore.toUpperCase()}` }, product.nutriscore.toUpperCase()) : null;
   const step = stepper({
     value: item.qte, step: uniteById(item.unite).step, min: 0, label: item.nom, size: 'stepper-sm',
     format: (v) => fmtQte({ ...item, conditionnement: '', qte: v }),
@@ -120,7 +124,7 @@ function itemRow(item, st) {
       h('span', { class: 'stock-text' },
         h('span', { class: 'stock-name' }, item.nom),
         meta ? h('span', { class: 'stock-meta muted small' }, meta) : null,
-        h('span', { class: 'badges' }, h('span', { class: `dlc-badge dlc-${info.status}` }, dlcLabel(item, info)), conflicts.length ? h('span', { class: 'tag-allergene', title: `Contient : ${conflicts.join(', ')}` }, icon('alert'), conflicts[0]) : null))),
+        h('span', { class: 'badges' }, nutri, h('span', { class: `dlc-badge dlc-${info.status}` }, dlcLabel(item, info)), conflicts.length ? h('span', { class: 'tag-allergene', title: `Contient : ${conflicts.join(', ')}` }, icon('alert'), conflicts[0]) : null))),
     step,
   );
   return li;
@@ -259,7 +263,7 @@ function antiGaspiZone(state) {
       h('div', { class: 'row-actions' },
         h('button', { type: 'button', class: 'btn btn-secondary', onclick: openJournal }, icon('clock'), 'Journal'),
         h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => openStats(state) }, icon('list'), 'Statistiques'),
-        state.stock.items.length ? h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => printLabels(state.stock.items.filter((i) => !i.code)).catch((e) => toast(e.message)) }, icon('image'), 'Étiquettes QR') : null)));
+        state.stock.items.length && isOn('etiquettesQR') ? h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => printLabels(state.stock.items.filter((i) => !i.code)).catch((e) => toast(e.message)) }, icon('image'), 'Étiquettes QR') : null)));
 }
 /** Statistiques anti-gaspi sur six mois. */
 function openStats(state) {

@@ -9,6 +9,7 @@ import { openExpenseSheet } from '../components/expense-sheet.js';
 import { stockSummary } from '../stock.js';
 import { objectifsStatus } from '../finance.js';
 import { wallZone } from '../components/wall.js';
+import { isOn } from '../modules.js';
 
 export function renderToday() {
   const state = getState();
@@ -42,15 +43,15 @@ export function renderToday() {
           ? h('p', { class: 'muted small' }, `Cycle suivi depuis le ${dateShort(b.suiviDepuis)} : l'enveloppe est calculée au prorata des jours suivis.`)
           : null,
       ),
-      h('div', { class: 'mini-gauges' },
+      isOn('miniJauges') ? h('div', { class: 'mini-gauges' },
         miniGauge('week', 'Cette semaine', b.semaine),
         miniGauge('month', 'Ce mois', b.mois),
-      ),
+      ) : null,
     );
   }
 
   const stock = stockSummary(state);
-  if (stock.perimes + stock.urgents + stock.ddm > 0) {
+  if (isOn('alerteStock') && isOn('stock') && stock.perimes + stock.urgents + stock.ddm > 0) {
     const bits = [];
     if (stock.perimes) bits.push(`${stock.perimes} produit${stock.perimes > 1 ? 's' : ''} périmé${stock.perimes > 1 ? 's' : ''} (DLC)`);
     if (stock.urgents) bits.push(`${stock.urgents} à consommer vite`);
@@ -58,7 +59,7 @@ export function renderToday() {
     root.append(h('a', { class: `stock-alert${stock.perimes ? '' : ' is-soft'}`, href: '#stock' }, icon('alert'), h('span', null, `Stock : ${bits.join(' · ')}`), icon('chevron')));
   }
   const objs = objectifsStatus(state, state.expenses.filter((e) => e.date >= b.cycle.start && e.date < b.cycle.end)).filter((o) => o.statut !== 'ok');
-  if (objs.length) {
+  if (objs.length && isOn('alerteObjectifs') && isOn('objectifs')) {
     const worst = objs.sort((a, z) => z.ratio - a.ratio)[0];
     root.append(h('a', { class: `stock-alert${worst.statut === 'depasse' ? '' : ' is-soft'}`, href: '#depenses' }, icon('alert'),
       h('span', null, objs.map((o) => `${o.cat.nom} : ${Math.round(o.ratio * 100)} % de l’objectif`).join(' · ')), icon('chevron')));
@@ -80,9 +81,9 @@ export function renderToday() {
     );
   }
 
-  root.append(wallZone(state));
+  if (isOn('mur')) root.append(wallZone(state));
 
-  if (b.configured) {
+  if (b.configured && isOn('serie')) {
     root.append(h('p', { class: 'streak muted small' },
       b.streak === 0 ? 'Aucun jour d’affilée sous ton budget pour l’instant.' : `${b.streak} jour${b.streak > 1 ? 's' : ''} d’affilée sous ton budget`));
   }
