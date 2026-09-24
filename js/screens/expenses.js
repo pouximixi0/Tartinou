@@ -5,6 +5,7 @@ import { getState, categoryById } from '../store.js';
 import { computeBudget, recentCycles, sumBetween, dailyMaxFor, trackedEnveloppe } from '../budget.js';
 import { expenseList } from '../components/expense-row.js';
 import { openExpenseSheet } from '../components/expense-sheet.js';
+import { objectifsStatus } from '../finance.js';
 
 // Filtres conservés entre deux rendus.
 const filters = { cycle: 0, categorie: 'all' };
@@ -61,10 +62,13 @@ export function renderExpenses() {
       h('ul', { class: 'bars', 'aria-label': 'Répartition par catégorie' },
         sorted.map(([id, amount]) => {
           const cat = categoryById(id);
-          return h('li', { class: 'bar-row' },
+          const obj = Number((state.settings.objectifs || {})[id]) || 0;
+          const ratio = obj ? amount / obj : 0;
+          const cls = obj ? (ratio >= 1 ? ' is-depasse' : ratio >= 0.8 ? ' is-alerte' : '') : '';
+          return h('li', { class: `bar-row${cls}` },
             h('div', { class: 'bar-head' },
               h('span', null, cat.nom),
-              h('span', { class: 'num' }, `${money(amount)} · ${pct(amount, totalCycle)} %`)),
+              h('span', { class: 'num' }, `${money(amount)} · ${pct(amount, totalCycle)} %`, obj ? h('span', { class: 'obj' }, ` · objectif ${money(obj)}`) : null)),
             h('div', { class: 'bar-track' }, h('div', { class: 'bar-fill', style: { width: `${(amount / maxCat) * 100}%`, background: cat.couleur } })));
         })),
     );

@@ -1,6 +1,6 @@
 // Ligne de dépense : toucher pour modifier, bouton ou glissement vers la gauche pour supprimer.
 import { h, icon, money, toast } from '../utils.js';
-import { categoryById, update } from '../store.js';
+import { categoryById, update, syncStatus } from '../store.js';
 import { openExpenseSheet } from './expense-sheet.js';
 
 export function expenseRow(e) {
@@ -12,7 +12,7 @@ export function expenseRow(e) {
       h('span', { class: 'chip-dot', style: { '--chip': cat.couleur }, 'aria-hidden': 'true' }),
       h('span', { class: 'expense-text' },
         h('span', { class: 'expense-title' }, title),
-        e.note ? h('span', { class: 'expense-cat muted' }, cat.nom) : null),
+        e.note || showAuthor(e) ? h('span', { class: 'expense-cat muted' }, e.note ? cat.nom : null, showAuthor(e) ? [e.note ? ' · ' : '', h('span', { class: 'expense-auteur' }, e.auteur)] : null) : null),
       h('span', { class: 'expense-amount num' }, money(e.montant))),
     h('button', { type: 'button', class: 'btn-icon expense-delete', 'aria-label': `Supprimer ${title}, ${money(e.montant)}`, onclick: () => remove(row, e) }, icon('trash')),
   );
@@ -20,6 +20,9 @@ export function expenseRow(e) {
   attachSwipe(row, inner, () => remove(row, e));
   return row;
 }
+
+/** Le prénom de l'auteur n'a d'intérêt qu'à plusieurs dans le foyer. */
+const showAuthor = (e) => !!e.auteur && (syncStatus().foyer?.membres?.length || 1) > 1;
 
 export function expenseList(expenses) {
   return h('ul', { class: 'expense-list' }, expenses.map(expenseRow));

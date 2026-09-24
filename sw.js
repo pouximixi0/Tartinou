@@ -2,7 +2,7 @@
 // ZXing et images Open Food Facts mis en cache à la première visite ; l'API
 // (/api/) et Open Food Facts ne passent jamais par le cache.
 // Incrémente VERSION à chaque déploiement.
-const VERSION = 'foyer-v2.2.1';
+const VERSION = 'foyer-v2.3.1';
 const RUNTIME = 'foyer-runtime';
 const ASSETS = [
   './',
@@ -13,6 +13,10 @@ const ASSETS = [
   './js/utils.js',
   './js/api.js',
   './js/store.js',
+  './js/finance.js',
+  './js/push.js',
+  './js/qr.js',
+  './js/planning.js',
   './js/budget.js',
   './js/menu-schema.js',
   './js/motion.js',
@@ -29,6 +33,9 @@ const ASSETS = [
   './js/components/product-sheet.js',
   './js/components/ranger-sheet.js',
   './js/components/waste-dialog.js',
+  './js/components/inventory-sheet.js',
+  './js/components/cook-dialog.js',
+  './js/components/tonight-sheet.js',
   './js/screens/today.js',
   './js/screens/expenses.js',
   './js/screens/menus.js',
@@ -90,4 +97,28 @@ self.addEventListener('fetch', (event) => {
       return res;
     })),
   );
+});
+
+/* ---------- Notifications push ---------- */
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = { title: 'Tartinou', body: event.data ? event.data.text() : '' }; }
+  const title = data.title || 'Tartinou';
+  event.waitUntil(self.registration.showNotification(title, {
+    body: data.body || '',
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    tag: data.tag || 'tartinou',
+    renotify: true,
+    data: { url: data.url || './' },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data && event.notification.data.url ? event.notification.data.url : './', self.location.href).href;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    for (const c of list) { if ('focus' in c) { c.navigate(target); return c.focus(); } }
+    return self.clients.openWindow(target);
+  }));
 });

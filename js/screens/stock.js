@@ -3,7 +3,9 @@
 // « À racheter » et journal anti-gaspi.
 import { h, icon, toast, todayISO, money, fmtDate, addDays, uid } from '../utils.js';
 import { getState, update, currentWeek } from '../store.js';
-import { EMPLACEMENTS, uniteById, dlcInfo, dlcLabel, fmtQte, stockSummary, stockValue, valueOf, sortItems, removeStockItem, journalStats, normalizeText, adjustStockQty } from '../stock.js';
+import { EMPLACEMENTS, uniteById, dlcInfo, dlcLabel, fmtQte, stockSummary, stockValue, valueOf, sortItems, removeStockItem, journalStats, normalizeText, adjustStockQty, allergenConflicts, wasteStats } from '../stock.js';
+import { openInventorySheet } from '../components/inventory-sheet.js';
+import { isLabelCode, itemIdFromLabel, printLabels } from '../qr.js';
 import { openScanner, cameraAvailable } from '../scanner.js';
 import { openProductSheet } from '../components/product-sheet.js';
 import { openWasteDialog } from '../components/waste-dialog.js';
@@ -33,7 +35,8 @@ export function renderStock() {
       val.avecPrix ? h('p', { class: 'muted small' }, 'Valeur du stock : ', h('strong', { class: 'num' }, money(val.total)), val.sansPrix ? ` (${val.sansPrix} produit${val.sansPrix > 1 ? 's' : ''} sans prix)` : '') : null),
     h('div', { class: 'row-actions' },
       h('button', { type: 'button', class: 'btn btn-primary btn-tall', onclick: () => startScan() }, icon('camera'), 'Scanner un produit'),
-      h('button', { type: 'button', class: 'btn btn-secondary btn-tall', onclick: () => openProductSheet({}) }, icon('plus'), 'À la main')),
+      h('button', { type: 'button', class: 'btn btn-secondary btn-tall', onclick: () => openProductSheet({}) }, icon('plus'), 'À la main'),
+      items.length ? h('button', { type: 'button', class: 'btn btn-secondary btn-tall', onclick: openInventorySheet }, icon('check'), 'Rangement') : null),
   );
 
   if (!items.length) {
@@ -101,7 +104,8 @@ function itemRow(item, st) {
   const thumb = item.image
     ? h('img', { class: 'stock-thumb', src: item.image, alt: '', loading: 'lazy', onerror: (ev) => ev.target.replaceWith(h('span', { class: 'stock-thumb stock-thumb-empty' }, icon('box'))) })
     : h('span', { class: 'stock-thumb stock-thumb-empty' }, icon('box'));
-  const meta = [item.marque, item.conditionnement && item.unite === 'piece' ? item.conditionnement : '', item.ouvertLe ? 'ouvert' : ''].filter(Boolean).join(' · ');
+  const meta = [item.marque, item.conditionnement && item.unite === 'piece' ? item.conditionnement : '', item.ouvertLe ? 'ouvert' : '', item.portions != null ? `${item.portions} portion${item.portions > 1 ? 's' : ''}` : '', item.magasin || ''].filter(Boolean).join(' · ');
+  const conflicts = allergenConflicts(getState(), item.code ? getState().stock.products[item.code] : null);
   const step = stepper({
     value: item.qte, step: uniteById(item.unite).step, min: 0, label: item.nom, size: 'stepper-sm',
     format: (v) => fmtQte({ ...item, conditionnement: '', qte: v }),
@@ -116,7 +120,7 @@ function itemRow(item, st) {
       h('span', { class: 'stock-text' },
         h('span', { class: 'stock-name' }, item.nom),
         meta ? h('span', { class: 'stock-meta muted small' }, meta) : null,
-        h('span', { class: `dlc-badge dlc-${info.status}` }, dlcLabel(item, info)))),
+        h('span', { class: 'badges' }, h('span', { class: `dlc-badge dlc-${info.status}` }, dlcLabel(item, info)), conflicts.length ? h('span', { class: 'tag-allergene', title: `Contient : ${conflicts.join(', ')}` }, icon('alert'), conflicts[0]) : null))),
     step,
   );
   return li;
@@ -162,6 +166,19 @@ export function startScan(initialMode = 'ajout') {
     modes: [{ id: 'ajout', label: 'Ajouter' }, { id: 'retrait', label: 'Retirer' }],
     onModeChange: (m) => { mode = m; },
     onCode: (code, api) => {
+      if (isLabelCode(code)) {
+        const item = getState().stock.items.find((x) => x.id === itemIdFromLabel(code));
+        if (!item) { api.setStatus('Étiquette inconnue : le produit n’est plus en stock'); return; }
+        if (mode === 'retrait') {
+          const step = uniteById(item.unite).step;
+          update((s) => adjustStockQty(s, item.id, -step, 'conso'));
+          api.setStatus(item.qte - step > 0 ? `${item.nom} : −${step}` : `${item.nom} : plus en stock`);
+          return;
+        }
+        api.pause();
+        openProductSheet({ item, onClose: () => api.resume() });
+        return;
+      }
       if (mode === 'retrait') return retirerParCode(code, api);
       api.pause();
       const st = getState().settings.stock;
@@ -239,8 +256,33 @@ function antiGaspiZone(state) {
         stat(stats.jete, 'jetés', stats.jete > 0),
         stat(money(stats.jeteValeur), 'gaspillés', stats.jeteValeur > 0)),
       h('p', { class: 'muted small' }, stats.jete && stats.jeteSansPrix ? `${stats.jeteSansPrix} produit${stats.jeteSansPrix > 1 ? 's' : ''} jeté${stats.jeteSansPrix > 1 ? 's' : ''} sans prix : le montant réel est plus élevé. Renseigne le prix à l’ajout ou au moment de jeter.` : 'Le montant vient des prix renseignés sur les produits jetés.'),
-      h('button', { type: 'button', class: 'btn btn-secondary btn-block', onclick: openJournal }, icon('clock'), 'Voir le journal')));
+      h('div', { class: 'row-actions' },
+        h('button', { type: 'button', class: 'btn btn-secondary', onclick: openJournal }, icon('clock'), 'Journal'),
+        h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => openStats(state) }, icon('list'), 'Statistiques'),
+        state.stock.items.length ? h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => printLabels(state.stock.items.filter((i) => !i.code)).catch((e) => toast(e.message)) }, icon('image'), 'Étiquettes QR') : null)));
 }
+/** Statistiques anti-gaspi sur six mois. */
+function openStats(state) {
+  const w = wasteStats(state);
+  const maxJete = Math.max(1, ...w.perMonth.map((m) => m.jete));
+  openDialog({
+    title: 'Anti-gaspi sur 6 mois',
+    content: [
+      h('div', { class: 'stats-row' },
+        stat(w.tauxAvantDate != null ? `${w.tauxAvantDate} %` : '–', 'consommé avant date'),
+        stat(w.jete, 'jetés', w.jete > 0),
+        stat(money(w.perMonth.reduce((a, m) => a + m.jeteValeur, 0)), 'gaspillés', w.jete > 0)),
+      h('h3', { class: 'h-small' }, 'Par mois'),
+      h('ul', { class: 'bars' }, w.perMonth.map((m) => h('li', { class: 'bar-row' },
+        h('div', { class: 'bar-head' }, h('span', null, m.label), h('span', { class: 'num' }, `${m.jete} jeté${m.jete > 1 ? 's' : ''}${m.jeteValeur ? ` · ${money(m.jeteValeur)}` : ''} · ${m.conso} consommé${m.conso > 1 ? 's' : ''}`)),
+        h('div', { class: 'bar-track' }, h('div', { class: 'bar-fill', style: { width: `${Math.round((m.jete / maxJete) * 100)}%`, background: 'var(--danger)' } }))))),
+      w.byCategory.length ? [h('h3', { class: 'h-small' }, 'Par catégorie'), h('ul', { class: 'plain-list' }, w.byCategory.map((c) => h('li', null, `${c.categorie} : ${c.n} jeté${c.n > 1 ? 's' : ''}${c.valeur ? ` (${money(c.valeur)})` : ''}`)))] : null,
+      w.topProducts.length ? [h('h3', { class: 'h-small' }, 'Le plus souvent jetés'), h('ul', { class: 'plain-list' }, w.topProducts.map((p) => h('li', null, `${p.nom} : ${p.n} fois${p.valeur ? ` (${money(p.valeur)})` : ''}`)))] : null,
+      !w.jete && !w.conso ? h('p', { class: 'muted' }, 'Pas encore assez d’historique : consomme et jette depuis l’app pour alimenter ces chiffres.') : null,
+    ],
+  });
+}
+
 function stat(value, label, bad = false) {
   return h('div', { class: `stat${bad ? ' is-bad' : ''}` }, h('span', { class: 'stat-value num' }, String(value)), h('span', { class: 'stat-label muted small' }, label));
 }

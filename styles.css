@@ -505,3 +505,34 @@ dialog.sheet-compact::before { content: ''; display: block; width: 36px; height:
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* ---------- Connexion, compte, objectifs, suggestions ---------- */
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.login-logo { margin: 0 auto 6px; border-radius: 18px; }
+.code-invit { letter-spacing: 0.08em; font-size: 1.05rem; }
+.suggestions { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: var(--accent-soft); border-radius: var(--r-lg); }
+.row-cat .input-objectif { flex: 0 0 96px; text-align: right; }
+.bar-head .obj { font-size: 0.8rem; color: var(--muted); }
+.bar-row.is-alerte .bar-head .num { color: var(--budget); }
+.bar-row.is-depasse .bar-head .num { color: var(--danger); }
+.bar-goal { position: relative; }
+.bar-goal::after { content: ''; position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); left: var(--goal, 100%); opacity: .5; }
+.tag-allergene { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; background: var(--danger-soft); color: var(--danger); font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
+.expense-auteur { color: var(--muted); }
+
+.badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.price-insight { padding: 6px 10px; border-radius: 8px; background: var(--accent-soft); }
+.allergen-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tag-allergene .icon { width: 14px; height: 14px; }
+.inv-progress { display: flex; align-items: center; gap: 12px; }
+.inv-progress .gauge { flex: 1; }
+.inv-card { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 20px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); }
+.inv-thumb { width: 120px; height: 120px; border-radius: 16px; object-fit: cover; background: var(--surface-2); display: inline-flex; align-items: center; justify-content: center; }
+.inv-name { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.01em; }
+.inv-qty { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 6px; }
+.inv-foot .btn-primary { flex: 2; }
+.qr-preview svg { width: 120px; height: 120px; }
+
+.link-plain { background: none; border: 0; padding: 0; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.recipe-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.recipe-head .h-small { margin: 0; }

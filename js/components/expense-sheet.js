@@ -1,7 +1,7 @@
 // Feuille plein écran de saisie d'une dépense : pavé numérique, catégorie,
 // note, date. Trois gestes : montant → catégorie → Enregistrer.
 import { h, icon, uid, todayISO, moneyPlain, parseAmount, toast } from '../utils.js';
-import { getState, update } from '../store.js';
+import { getState, update, currentUser } from '../store.js';
 import { confirmDialog } from './dialog.js';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', 'del'];
@@ -65,7 +65,7 @@ export function openExpenseSheet({ expense = null, date = todayISO() } = {}) {
         const e = s.expenses.find((x) => x.id === expense.id);
         if (e) Object.assign(e, { montant, categorieId, note, date: dateInput.value });
       } else {
-        s.expenses.push({ id: uid(), montant, categorieId, note, date: dateInput.value, createdAt: Date.now() });
+        s.expenses.push({ id: uid(), montant, categorieId, note, date: dateInput.value, createdAt: Date.now(), auteur: currentUser()?.nom || null });
       }
     });
     dlg.close();

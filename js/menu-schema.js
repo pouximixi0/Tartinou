@@ -187,3 +187,65 @@ export function ecartLineFor(week) {
 /** Nombre de repas non nuls d'un menu. */
 export const mealCount = (menu) => menu.jours.reduce((n, j) => n + (j.midi ? 1 : 0) + (j.soir ? 1 : 0), 0);
 export const coursesTotal = (items) => items.reduce((a, c) => a + (Number(c.prix_estime) || 0), 0);
+
+/* ---------- Une seule recette (« Que cuisiner ce soir ? ») ---------- */
+export const RECIPE_SCHEMA_TEXT = `{
+  "nom": "Poêlée de légumes au poulet",
+  "temps": 25,
+  "tags": ["anti-gaspi", "rapide"],
+  "personnes": 2,
+  "ingredients": [
+    { "article": "Poulet", "quantite": "300 g", "en_stock": true },
+    { "article": "Courgettes", "quantite": "2", "en_stock": true },
+    { "article": "Crème fraîche", "quantite": "10 cl", "en_stock": false }
+  ],
+  "recette": "1. Couper les légumes.\n2. Saisir le poulet.\n3. Ajouter les légumes, cuire 10 min."
+}`;
+
+/** Valide une recette seule. Retourne { ok, recipe } ou { ok: false, errors }. */
+export function validateRecipe(obj) {
+  const errors = [];
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return { ok: false, errors: ['le JSON doit être un objet { … }'] };
+  if (!isStr(obj.nom) || !obj.nom.trim()) errors.push('champ nom manquant ou vide');
+  if (obj.temps !== undefined && !isNum(obj.temps)) errors.push('champ temps doit être un nombre de minutes');
+  if (!isStr(obj.recette) || !obj.recette.trim()) errors.push('champ recette manquant');
+  if (obj.ingredients !== undefined && !Array.isArray(obj.ingredients)) errors.push('champ ingredients doit être une liste');
+  if (obj.tags !== undefined && (!Array.isArray(obj.tags) || obj.tags.some((t) => !isStr(t)))) errors.push('champ tags doit être une liste de textes');
+  if (errors.length) return { ok: false, errors };
+  return {
+    ok: true,
+    recipe: {
+      nom: obj.nom.trim(), temps: isNum(obj.temps) ? obj.temps : 30, tags: obj.tags || [], recette: obj.recette, personnes: Number.isInteger(obj.personnes) && obj.personnes > 0 ? obj.personnes : 2,
+      ingredients: (obj.ingredients || []).filter((i) => i && isStr(i.article) && i.article.trim()).map((i) => ({ article: i.article.trim(), quantite: i.quantite == null ? '' : String(i.quantite), rayon: isStr(i.rayon) ? i.rayon : 'Autre', prix_estime: isNum(i.prix_estime) ? i.prix_estime : 0, enStock: !!i.en_stock })),
+    },
+  };
+}
+
+/**
+ * Prompt « Que cuisiner ce soir ? » : une recette avec ce qu'il y a, en priorité ce qui périme.
+ * `stock` = { placards, urgentLine, ddmLine } (voir stockPromptLines) ; `restes` = restes du menu en cours.
+ */
+export function buildTonightPrompt({ personnes, tempsMax, regime, allergies }, stock, restes = [], quand = 'ce soir') {
+  const or = (v, fallback) => (String(v || '').trim() ? String(v).trim() : fallback);
+  const lines = [
+    `Tu es mon assistant cuisine. Propose UNE recette pour ${quand}, pour ${personnes} personne${personnes > 1 ? 's' : ''}, prête en ${tempsMax} minutes maximum, en utilisant en priorité ce que j'ai déjà.`,
+    '',
+    `Ce que j'ai en stock : ${or(stock.placards, 'rien de particulier')}.`,
+  ];
+  if (stock.urgentLine) lines.push(stock.urgentLine);
+  if (stock.ddmLine) lines.push(stock.ddmLine);
+  if (restes.length) lines.push(`Restes disponibles : ${restes.join(' ; ')}.`);
+  lines.push(
+    `Contraintes et régime : ${or(regime, 'aucune')}.`,
+    `Allergies et aversions : ${or(allergies, 'aucune')}.`,
+    '',
+    'Consignes :',
+    '- Utilise d\'abord les produits proches de leur date limite, puis le reste du stock ; limite les achats à 3 articles maximum, marqués "en_stock": false.',
+    '- Recette courte : 3 à 6 étapes, sans blabla.',
+    '',
+    'Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après, sans balises markdown, selon ce schéma :',
+    '',
+    RECIPE_SCHEMA_TEXT,
+  );
+  return lines.join('\n');
+}

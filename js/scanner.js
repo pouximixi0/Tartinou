@@ -6,7 +6,7 @@ import { getState } from './store.js';
 import { openDialog } from './components/dialog.js';
 
 const ZXING_URL = 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm';
-const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'];
+const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'];
 const CODE_RE = /^\d{8,14}$/;
 let zxingModule = null;
 let audioCtx = null;
@@ -145,7 +145,8 @@ export function openScanner({ onCode, modes = null, mode = 'ajout', onModeChange
 
   function handle(raw, { manual = false } = {}) {
     const code = String(raw || '').replace(/\s/g, '');
-    if (!CODE_RE.test(code)) { if (manual) toast('Un code-barres comporte 8 à 13 chiffres.'); else setStatus('Code non reconnu, réessaie'); return; }
+    const isLabel = code.startsWith('tartinou:');
+    if (!isLabel && !CODE_RE.test(code)) { if (manual) toast('Un code-barres comporte 8 à 13 chiffres.'); else setStatus('Code non reconnu, réessaie'); return; }
     if (paused) return;
     const now = Date.now();
     if (!manual && code === lastCode && now - lastAt < 2500) return;

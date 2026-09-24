@@ -4,8 +4,10 @@ import { getState, update, currentWeek } from '../store.js';
 import { computeBudget } from '../budget.js';
 import { MEAL_OPTIONS, cleanJson, validateMenu, buildPrompt, ecartLineFor, mealCount, coursesTotal } from '../menu-schema.js';
 import { openDialog, confirmDialog } from '../components/dialog.js';
-import { openRecipe, mealLabel } from '../components/recipe.js';
+import { openRecipe, mealLabel, openFavoriteRecipe } from '../components/recipe.js';
 import { stockPromptLines } from '../stock.js';
+import { openTonightSheet } from '../components/tonight-sheet.js';
+import { putMealInWeek, todayDayName } from '../planning.js';
 
 const ui = { importText: '', importErrors: [] };
 
@@ -22,10 +24,13 @@ export function renderMenus() {
   if (week) root.append(weekHeader(week, b));
   else root.append(h('p', { class: 'empty-line muted' }, 'Pas encore de menu cette semaine. ', h('a', { class: 'link', href: '#prompt-form' }, 'Générer le prompt.')));
 
-  root.append(promptZone(state, b), importZone(state, week));
+  root.append(
+    h('button', { type: 'button', class: 'btn btn-primary btn-block btn-tall', onclick: openTonightSheet }, icon('pot'), 'Que cuisiner ce soir ?'),
+    promptZone(state, b), importZone(state, week));
   if (week) root.append(weekZone(week));
   root.append(h('div', { class: 'row-actions' },
     h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => openHistory() }, icon('clock'), 'Historique')));
+  root.append(favoritesZone(state));
   return root;
 }
 
@@ -45,7 +50,10 @@ function promptZone(state, b) {
 
   async function copy() {
     const sl = stockPromptLines(getState());
-    const text = buildPrompt(getState().promptForm, budgetInput.value || autoBudget, ecartLineFor(lastValidatedWeek(getState())), [sl.urgentLine, sl.ddmLine]);
+    const pf = getState().promptForm;
+    const restes = pf.restesDabord ? restesLine(getState()) : null;
+    const favs = getState().recettes.length ? `Recettes que j'aime déjà, à réutiliser si elles collent : ${getState().recettes.slice(0, 12).map((r) => r.nom).join(', ')}.` : null;
+    const text = buildPrompt(pf, budgetInput.value || autoBudget, ecartLineFor(lastValidatedWeek(getState())), [sl.urgentLine, sl.ddmLine, restes, favs]);
     try {
       await navigator.clipboard.writeText(text);
       toast('Prompt copié. Colle-le dans Claude.');
@@ -82,6 +90,10 @@ function promptZone(state, b) {
       textField('p-regime', 'Régime et contraintes', form.regime, (v) => setForm('regime', v), 'Ex. peu de viande rouge, plats à emporter au bureau'),
       textField('p-allergies', 'Allergies et aversions', form.allergies, (v) => setForm('allergies', v), 'Ex. arachides, pas de coriandre'),
       placardsField,
+      h('label', { class: 'switch' },
+        h('input', { type: 'checkbox', role: 'switch', checked: !!form.restesDabord, onchange: (ev) => setForm('restesDabord', ev.target.checked) }),
+        h('span', { class: 'switch-track', 'aria-hidden': 'true' }),
+        h('span', null, 'Restes d’abord', h('span', { class: 'muted small block' }, 'Les trois premiers jours utilisent ce qui périme dans les 3 jours et les restes du menu précédent.'))),
       ecart ? h('p', { class: 'muted small' }, 'Sera ajouté au prompt : « ', ecart, ' »') : null,
       stockLines.urgentLine ? h('p', { class: 'muted small' }, 'Sera ajouté au prompt : « ', stockLines.urgentLine, ' »') : null,
       stockLines.ddmLine ? h('p', { class: 'muted small' }, 'Sera ajouté au prompt : « ', stockLines.ddmLine, ' »') : null,
@@ -188,7 +200,7 @@ function mealRow(week, jour, moment, meal) {
     h('span', { class: 'meal-moment' }, capitalize(moment)),
     h('span', { class: 'meal-body' },
       h('span', { class: 'meal-name' }, meal.nom),
-      h('span', { class: 'meal-meta muted small' }, `${meal.temps} min`, meal.tags.length ? ` · ${meal.tags.join(' · ')}` : '')),
+      h('span', { class: 'meal-meta muted small' }, `${meal.temps} min`, meal.tags.length ? ` · ${meal.tags.join(' · ')}` : '', week.cooked?.[`${jour} ${moment}`] ? h('span', { class: 'tag-stock' }, 'cuisiné') : null)),
     icon('chevron', 'meal-chevron'),
   );
 }
@@ -236,4 +248,45 @@ async function redo(w) {
   });
   toast('Menu réimporté pour cette semaine');
   return true;
+}
+
+/* ---------- Restes d'abord ---------- */
+/** Phrase forte pour le prompt : ce qui périme sous 3 jours et les restes du menu précédent. */
+function restesLine(state) {
+  const urgent = stockPromptLines(state).urgentLine;
+  const prev = state.menus.weeks.find((w) => w.id === state.menus.currentId) || state.menus.weeks[0];
+  const restes = prev?.menu?.restes?.length ? `Restes du menu précédent : ${prev.menu.restes.join(' ; ')}.` : '';
+  return `PRIORITÉ ABSOLUE : construis les repas des trois premiers jours autour de ce qui doit être consommé vite. ${urgent || 'Rien ne périme dans les trois jours.'} ${restes}`.trim();
+}
+
+/* ---------- Recettes favorites ---------- */
+function favoritesZone(state) {
+  const list = state.recettes;
+  function plan(recipe) {
+    let jour = todayDayName();
+    let moment = new Date().getHours() < 14 ? 'midi' : 'soir';
+    const jourSel = h('select', { class: 'input', 'aria-label': 'Jour', value: jour, onchange: (ev) => { jour = ev.target.value; } }, DAYS.map((d) => h('option', { value: d }, capitalize(d))));
+    const momentSel = h('select', { class: 'input', 'aria-label': 'Moment', value: moment, onchange: (ev) => { moment = ev.target.value; } }, [['midi', 'Midi'], ['soir', 'Soir']].map(([v, l]) => h('option', { value: v }, l)));
+    const dlg = openDialog({
+      title: `Mettre « ${recipe.nom} » au menu`,
+      cls: 'sheet-compact',
+      content: [h('div', { class: 'field-row' }, h('div', { class: 'field' }, h('label', null, 'Jour'), jourSel), h('div', { class: 'field' }, h('label', null, 'Moment'), momentSel)),
+        h('p', { class: 'muted small' }, 'Les ingrédients absents du stock rejoignent la liste de courses de la semaine.')],
+      actions: [h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => dlg.close() }, 'Annuler'),
+        h('button', { type: 'button', class: 'btn btn-primary', onclick: () => {
+          update((s) => putMealInWeek(s, { ...recipe, ingredients: (recipe.ingredients || []).map((i) => ({ ...i, enStock: false })) }, jour, moment));
+          dlg.close();
+          toast(`${recipe.nom} : ${capitalize(jour)} ${moment}`);
+        } }, 'Mettre au menu')],
+    });
+  }
+  return h('details', { class: 'zone', open: list.length > 0 && list.length <= 6 },
+    h('summary', { class: 'zone-title' }, 'Recettes favorites', list.length ? h('span', { class: 'zone-count num' }, String(list.length)) : null),
+    h('div', { class: 'zone-body' },
+      list.length
+        ? h('ul', { class: 'rows' }, list.map((r) => h('li', { class: 'row-item' },
+            h('button', { type: 'button', class: 'row-text link-plain', onclick: () => openFavoriteRecipe(r, { onPlan: plan }) }, r.nom, h('span', { class: 'muted small block' }, `${r.temps || '?'} min · ${(r.ingredients || []).length} ingrédient${(r.ingredients || []).length > 1 ? 's' : ''}${r.tags?.length ? ` · ${r.tags.slice(0, 3).join(', ')}` : ''}`)),
+            h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => plan(r) }, 'Au menu'),
+            h('button', { type: 'button', class: 'btn-icon', 'aria-label': `Retirer ${r.nom} des favoris`, onclick: async () => { const ok = await confirmDialog({ title: `Retirer « ${r.nom} » ?`, message: 'La recette disparaît des favoris.', confirmLabel: 'Retirer', danger: true }); if (ok) update((s) => { s.recettes = s.recettes.filter((x) => x.id !== r.id); }); } }, icon('trash')))))
+        : h('p', { class: 'muted small' }, 'Depuis une fiche recette, « Favoris » la garde ici pour la remettre au menu en un geste, sans repasser par le prompt.')));
 }

@@ -7,6 +7,7 @@ import { gauge } from '../components/gauge.js';
 import { expenseList } from '../components/expense-row.js';
 import { openExpenseSheet } from '../components/expense-sheet.js';
 import { stockSummary } from '../stock.js';
+import { objectifsStatus } from '../finance.js';
 
 export function renderToday() {
   const state = getState();
@@ -54,6 +55,12 @@ export function renderToday() {
     if (stock.urgents) bits.push(`${stock.urgents} à consommer vite`);
     if (stock.ddm) bits.push(`${stock.ddm} DDM dépassée${stock.ddm > 1 ? 's' : ''} à vérifier`);
     root.append(h('a', { class: `stock-alert${stock.perimes ? '' : ' is-soft'}`, href: '#stock' }, icon('alert'), h('span', null, `Stock : ${bits.join(' · ')}`), icon('chevron')));
+  }
+  const objs = objectifsStatus(state, state.expenses.filter((e) => e.date >= b.cycle.start && e.date < b.cycle.end)).filter((o) => o.statut !== 'ok');
+  if (objs.length) {
+    const worst = objs.sort((a, z) => z.ratio - a.ratio)[0];
+    root.append(h('a', { class: `stock-alert${worst.statut === 'depasse' ? '' : ' is-soft'}`, href: '#depenses' }, icon('alert'),
+      h('span', null, objs.map((o) => `${o.cat.nom} : ${Math.round(o.ratio * 100)} % de l’objectif`).join(' · ')), icon('chevron')));
   }
 
   root.append(

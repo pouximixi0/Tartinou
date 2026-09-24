@@ -179,11 +179,14 @@ export function addStockItem(s, data) {
     dlc: data.dlc || null, ddm: !!data.ddm, ouvertLe: data.ouvertLe || null, ajouteLe: todayISO(),
     prix: data.prix === '' || data.prix == null || Number.isNaN(Number(data.prix)) ? null : round2(Number(data.prix)),
     seuilMin: Number(data.seuilMin) > 0 ? round2(Number(data.seuilMin)) : 0, image: data.image || null, notes: String(data.notes || '').trim(),
+    magasin: String(data.magasin || '').trim() || null, portions: Number(data.portions) > 0 ? round2(Number(data.portions)) : null,
   };
+  if (item.prix != null) recordPrice(s, { code: item.code, nom: item.nom, magasin: item.magasin, prix: item.prix, unite: item.unite });
   const twin = s.stock.items.find((x) => sameProduct(x, item) && x.emplacement === item.emplacement && (x.dlc || null) === (item.dlc || null) && x.unite === item.unite);
   if (twin) {
     twin.qte = round2(twin.qte + item.qte);
     if (item.prix != null) twin.prix = item.prix;
+    if (item.magasin) twin.magasin = item.magasin;
     if (!twin.image && item.image) twin.image = item.image;
     if (item.seuilMin) twin.seuilMin = item.seuilMin;
     journal(s, 'ajout', twin, item.qte);
@@ -194,6 +197,33 @@ export function addStockItem(s, data) {
   journal(s, 'ajout', item, item.qte);
   removeFromARacheter(s, item);
   return item;
+}
+/** Mémorise un prix observé (appelé à l'ajout quand un prix est saisi). */
+export function recordPrice(s, { code, nom, magasin, prix, unite }) {
+  if (!(prix >= 0) || !nom) return;
+  s.stock.prixHistorique.push({ id: uid(), code: code || null, nom: String(nom).trim(), magasin: String(magasin || '').trim() || null, prix: round2(prix), unite: unite || 'piece', date: todayISO() });
+  if (s.stock.prixHistorique.length > 2000) s.stock.prixHistorique.splice(0, s.stock.prixHistorique.length - 2000);
+}
+/** Ce qu'on sait du prix d'un produit : dernier prix, écart avec le précédent, meilleur magasin. */
+export function priceInsight(state, { code, nom }) {
+  const hist = state.stock.prixHistorique.filter((p) => (code && p.code === code) || (!code && nom && normalizeText(p.nom) === normalizeText(nom)) || (code && !p.code && nom && normalizeText(p.nom) === normalizeText(nom)));
+  if (!hist.length) return null;
+  const sorted = [...hist].sort((a, b) => a.date.localeCompare(b.date));
+  const last = sorted[sorted.length - 1];
+  const prev = sorted.length > 1 ? sorted[sorted.length - 2] : null;
+  const delta = prev && prev.prix > 0 ? (last.prix - prev.prix) / prev.prix : null;
+  const byStore = new Map();
+  for (const p of sorted) if (p.magasin) byStore.set(p.magasin, p);
+  const stores = [...byStore.values()].sort((a, b) => a.prix - b.prix);
+  return { last, prev, delta, stores, count: sorted.length };
+}
+export const knownStores = (state) => [...new Set([...state.stock.prixHistorique.map((p) => p.magasin), ...state.stock.items.map((i) => i.magasin)].filter(Boolean))].sort();
+
+/** Allergènes du produit qui croisent ceux du foyer. */
+export function allergenConflicts(state, product) {
+  if (!product || !Array.isArray(product.allergenes)) return [];
+  const mine = new Set((state.settings.allergenes || []).map(normalizeText));
+  return product.allergenes.filter((a) => mine.has(normalizeText(a)));
 }
 
 /** Ajuste la quantité de `delta` ; à zéro la ligne disparaît. `type` : 'ajout' | 'conso' | 'jete' | 'ajuste'. */
@@ -254,6 +284,44 @@ export function stockPromptLines(state, today = todayISO()) {
     ddmLine: ddm.length ? `Produits dont la DDM est dépassée, encore utilisables après vérification : ${ddm.join(', ')}.` : null,
   };
 }
+
+/* ---------- Statistiques anti-gaspi détaillées ---------- */
+/** Six derniers mois : par mois, par catégorie, produits les plus jetés, taux consommé avant date. */
+export function wasteStats(state, months = 6, today = todayISO()) {
+  const d = fromISOLocal(today);
+  const perMonth = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const start = new Date(d.getFullYear(), d.getMonth() - i, 1);
+    const end = new Date(d.getFullYear(), d.getMonth() - i + 1, 1);
+    const from = isoOf(start), to = isoOf(end);
+    const st = journalStats(state, from, to);
+    perMonth.push({ from, label: start.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }), ...st });
+  }
+  const from = perMonth[0].from;
+  const byCat = new Map();
+  const byProduct = new Map();
+  let conso = 0, jete = 0;
+  for (const j of state.stock.journal) {
+    if (j.date < from) continue;
+    if (j.type === 'jete') {
+      jete++;
+      const v = valueOf(j.prix, j.qte, j.unite) || 0;
+      const c = j.categorie || 'Autre';
+      byCat.set(c, { n: (byCat.get(c)?.n || 0) + 1, valeur: round2((byCat.get(c)?.valeur || 0) + v) });
+      const k = normalizeText(j.nom);
+      byProduct.set(k, { nom: j.nom, n: (byProduct.get(k)?.n || 0) + 1, valeur: round2((byProduct.get(k)?.valeur || 0) + v) });
+    } else if (j.type === 'conso') conso++;
+  }
+  return {
+    perMonth,
+    byCategory: [...byCat.entries()].map(([categorie, v]) => ({ categorie, ...v })).sort((a, b) => b.n - a.n),
+    topProducts: [...byProduct.values()].sort((a, b) => b.n - a.n || b.valeur - a.valeur).slice(0, 5),
+    tauxAvantDate: conso + jete ? Math.round((conso / (conso + jete)) * 100) : null,
+    conso, jete,
+  };
+}
+const fromISOLocal = (iso) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
+const isoOf = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
 
 /* ---------- Statistiques anti-gaspi ---------- */
 export function journalStats(state, from, to) {

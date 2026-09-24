@@ -2,7 +2,17 @@
 
 Tartinou est une application personnelle (PWA) qui réunit le suivi des dépenses quotidiennes, les menus de la semaine et le **stock alimentaire** (scan des codes-barres, dates limites, anti-gaspi).
 
-Depuis la v2, toutes les données vivent dans une **base SQLite sur ton serveur** (`server/`), exposée par une petite API sans dépendance npm. Le téléphone garde une copie locale (`localStorage`, clé `foyer:v2`) pour démarrer instantanément et fonctionner hors ligne : les modifications faites sans réseau partent dès la reconnexion.
+Depuis la v2, toutes les données vivent dans des **bases SQLite sur ton serveur** (`server/`), exposées par une petite API sans dépendance npm. On se crée un **compte** (identifiant, mot de passe) ; chaque **foyer** regroupe les personnes qui partagent les mêmes données et possède sa propre base. Le téléphone garde une copie locale (`localStorage`, clé `foyer:v2`) pour démarrer instantanément et fonctionner hors ligne ; les modifications faites sans réseau partent dès la reconnexion, et les autres appareils du foyer se mettent à jour en direct (SSE).
+
+## Fonctions
+
+- **Aujourd'hui** : reste à dépenser du jour, semaine, mois ; alertes stock et objectifs.
+- **Dépenses** : saisie au pavé, catégories avec objectifs par cycle (orange à 80 %, rouge au-delà), auteur de chaque dépense à plusieurs, import d'un relevé bancaire CSV avec rapprochement, dépenses récurrentes proposées en charges fixes.
+- **Menus** : prompt pour Claude (stock, produits urgents, « restes d'abord », recettes favorites), import du menu, « Que cuisiner ce soir ? » (une recette à partir de ce qui périme), fiche recette avec convives ajustables, « J'ai cuisiné ce plat » qui retire les ingrédients du stock, favoris remis au menu en un geste.
+- **Courses** : liste par rayon, « en stock » signalé, validation du ticket, « Ranger les courses », « À racheter ».
+- **Stock** : scan (caméra, photo, saisie, étiquettes QR maison), Open Food Facts, DLC/DDM, emplacements, prix par magasin avec historique (« plus cher que la dernière fois »), allergènes du foyer signalés, portions restantes, mode rangement (inventaire guidé), anti-gaspi (journal, statistiques sur six mois, euros gaspillés), étiquettes QR à imprimer.
+- **Notifications** (Web Push, sans dépendance) : dates limites du jour, bilan hebdomadaire le dimanche, bilan mensuel en fin de cycle, objectifs à 80 % et 100 %. Heure et contenus réglables, par appareil.
+- **Comptes et foyer** : inscription, connexion, code d'invitation, membres, administrateur, changement de mot de passe.
 
 ## Lancer en local
 
@@ -19,7 +29,7 @@ Icônes : `icons/icon-1024.png` est le logo source (fond marine) ; les tailles 5
 
 ## Déployer sur le serveur (life.pouximixi.fr)
 
-nginx sert les fichiers statiques et relaie `/api/` vers le service Node (port 3311, base dans `/var/lib/foyer/foyer.db`, code d'accès dans `/etc/foyer.env`).
+nginx sert les fichiers statiques et relaie `/api/` vers le service Node (port 3311, données dans `/var/lib/foyer/` : `accounts.db` pour les comptes, `foyers/<id>.db` par foyer). Le code serveur (`FOYER_TOKEN` dans `/etc/foyer.env`) n'est demandé que pour créer un nouveau foyer après le premier ; rejoindre un foyer existant passe par son code d'invitation.
 
 ```
 # 1. Fichiers
@@ -40,18 +50,23 @@ ssh -i ~/.ssh/pronote_ics_deploy root@100.105.207.97 '
 ssh -i ~/.ssh/pronote_ics_deploy root@100.105.207.97 'systemctl restart foyer'
 ```
 
-À chaque déploiement, incrémente `VERSION` dans `sw.js` pour que les appareils déjà installés récupèrent les nouveaux fichiers. Au premier lancement, l’app demande le **code d'accès** (la valeur de `FOYER_TOKEN`) ; il est mémorisé sur l'appareil. Un téléphone qui avait l'ancienne version 100 % locale envoie ses données au serveur si celui-ci est vide.
+À chaque déploiement, incrémente `VERSION` dans `sw.js` pour que les appareils déjà installés récupèrent les nouveaux fichiers. Au premier lancement, l'app propose de **créer un compte** : le premier compte du serveur crée son foyer librement et reprend l'ancienne base unique `foyer.db` si elle existe. Un téléphone qui avait l'ancienne version 100 % locale envoie ses données au serveur si le foyer est vide.
 
-Variables du serveur : `PORT` (3311), `HOST` (127.0.0.1), `FOYER_DB`, `FOYER_TOKEN`, `FOYER_STATIC=0` pour ne servir que l'API (c'est le cas derrière nginx).
+Variables du serveur : `PORT` (3311), `HOST` (127.0.0.1), `FOYER_DB` (chemin de référence, les bases vivent à côté), `FOYER_TOKEN` (code serveur), `FOYER_INSCRIPTION=ouverte` pour laisser créer des foyers sans code, `FOYER_STATIC=0` pour ne servir que l'API (c'est le cas derrière nginx), `TZ_APP` (Europe/Paris) pour l'heure des notifications, `FOYER_PUSH_SUBJECT` (mailto: pour VAPID). Les clés VAPID sont générées au premier démarrage et gardées dans `accounts.db`.
 
 ## API
 
-- `GET /api/health` : état du service.
-- `GET /api/state` : l'état complet (settings, categories, expenses, menus, promptForm, stock).
-- `PUT /api/state` : corps `{ expenses: […], stock: {…} }` — chaque collection présente remplace la sienne, dans une transaction.
-- `POST /api/reset` : vide la base.
+- `GET /api/health` : état du service (nombre de foyers, mode d'inscription, premier compte ou non).
+- `POST /api/auth/register` `{ login, nom, password, codeInvitation | nomFoyer + codeServeur }`, `POST /api/auth/login`, `POST /api/auth/logout`, `POST /api/auth/password`.
+- `GET /api/me` : compte, foyer (membres, code d'invitation pour l'administrateur), clé push et appareils abonnés.
+- `POST /api/foyer` `{ nom }` ou `{ nouveauCode: true }` ; `DELETE /api/members/:id` (administrateur).
+- `GET /api/state` : l'état complet du foyer (settings, categories, expenses, menus, promptForm, recettes, stock).
+- `PUT /api/state` : corps `{ expenses: […], stock: {…} }` — chaque collection présente remplace la sienne, dans une transaction ; les autres appareils reçoivent un événement.
+- `GET /api/events?token=…` : flux SSE des modifications du foyer.
+- `GET /api/push/key`, `POST /api/push/subscribe`, `DELETE /api/push/subscribe`, `POST /api/push/test`.
+- `POST /api/reset` : vide la base du foyer (administrateur).
 
-Toutes les routes sauf `health` exigent `Authorization: Bearer <FOYER_TOKEN>` quand le token est défini. Tables : `settings`, `charges_fixes`, `prompt_form`, `categories`, `expenses`, `menu_weeks`, `manual_items`, `stock_items`, `products`, `stock_journal`, `a_racheter` (voir `server/db.js`).
+Toutes les routes sauf `health` et `auth/*` exigent `Authorization: Bearer <jeton de session>`. Tables par foyer : `settings`, `charges_fixes`, `prompt_form`, `categories`, `expenses`, `menu_weeks`, `manual_items`, `recipes`, `stock_items`, `products`, `stock_journal`, `a_racheter`, `price_history`, `push_subscriptions`, `push_log` (voir `server/db.js`) ; comptes dans `accounts.db` (`foyers`, `users`, `sessions`, `push_config`).
 
 ## Stock alimentaire
 
@@ -74,9 +89,9 @@ Une seule feuille de style, `styles.css`. Police système (aucune requête exter
 ## Structure
 
 - `index.html`, `styles.css`, `app.js` (routeur, pastille de synchronisation) ; `manifest.json`, `sw.js`.
-- `server/index.js` (HTTP + API), `server/db.js` (schéma et lecture/écriture SQLite), `server/foyer.service`, `server/nginx-life.conf`.
-- `js/store.js` : état, cache local, file d'attente et synchronisation ; `js/api.js` : client HTTP et code d'accès.
+- `server/index.js` (HTTP, API, SSE, planificateur), `server/db.js` (schéma et lecture/écriture SQLite par foyer), `server/auth.js` (comptes, foyers, sessions), `server/webpush.js` (VAPID et chiffrement Web Push), `server/notify.js` (messages planifiés), `server/foyer.service`, `server/nginx-life.conf`.
+- `js/store.js` : état, cache local, file d'attente, synchronisation et temps réel ; `js/api.js` : client HTTP et session ; `js/push.js` : abonnement aux notifications ; `js/finance.js` : récurrences, objectifs, relevés CSV ; `js/planning.js` : placer une recette dans la semaine ; `js/qr.js` : étiquettes QR.
 - `js/budget.js` : `computeBudget()` alimente Aujourd'hui, Dépenses et le budget courses.
 - `js/menu-schema.js` : validation stricte du JSON de menu et assemblage du prompt.
 - `js/stock.js` : modèle du stock, dates limites, suggestions, journal ; `js/off.js` : Open Food Facts ; `js/scanner.js` : caméra et lecture des codes.
-- `js/screens/` : un module par écran ; `js/components/` : jauge, feuille de saisie, dialogues, recette, stepper, fiche produit, « Ranger les courses ».
+- `js/screens/` : un module par écran ; `js/components/` : jauge, feuille de saisie, dialogues, recette, stepper, fiche produit, « Ranger les courses », « Jeté ? », mode rangement, « J'ai cuisiné », « Que cuisiner ce soir ? ».
