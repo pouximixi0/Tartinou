@@ -118,7 +118,25 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => appl
 
 render();
 drawSync(syncStatus());
-initStore();
+initStore().then(importSharedRecipe);
+
+/** #recette=ID dans l'adresse (lien public) : la recette rejoint les favoris. */
+async function importSharedRecipe() {
+  const m = location.hash.match(/recette=([A-Za-z0-9_-]+)/);
+  if (!m || syncStatus().status === 'auth') return;
+  try {
+    const { api } = await import('./js/api.js');
+    const { update, getState } = await import('./js/store.js');
+    const { uid, todayISO, toast } = await import('./js/utils.js');
+    const r = await api('GET', `/public/recette/${m[1]}`);
+    if (getState().recettes.some((x) => x.nom.toLowerCase() === r.nom.toLowerCase())) toast(`« ${r.nom} » est déjà dans tes favoris`);
+    else { update((s) => { s.recettes.push({ id: uid(), nom: r.nom, temps: r.temps, tags: r.tags || [], recette: r.recette, lien: r.lien || null, ingredients: r.ingredients || [], personnes: r.personnes || 2, ajouteLe: todayISO() }); }); toast(`« ${r.nom} » ajoutée à tes recettes`); }
+  } catch (e) {
+    const { toast } = await import('./js/utils.js');
+    toast(e.message || 'Recette introuvable');
+  }
+  location.hash = '#menus';
+}
 
 if ('serviceWorker' in navigator) {
   // Quand une nouvelle version prend le contrôle (VERSION changée dans sw.js), on recharge

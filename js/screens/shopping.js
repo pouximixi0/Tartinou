@@ -7,6 +7,7 @@ import { openRecipe, findMeal, mealLabel } from '../components/recipe.js';
 import { findInStock } from '../stock.js';
 import { openRangerSheet } from '../components/ranger-sheet.js';
 import { aRacheterZone } from './stock.js';
+import { shareText, shoppingListText } from '../share.js';
 
 export function renderShopping() {
   const week = currentWeek();
@@ -31,6 +32,9 @@ export function renderShopping() {
       h('p', null, 'Dans le panier : ', h('strong', { class: 'num' }, money(totalChecked)), h('span', { class: 'muted' }, ' · liste complète ', h('span', { class: 'num' }, money(totalAll)))),
       frozen ? h('p', { class: 'validated-line' }, `Courses validées le ${fmtDate(week.validation.date, { day: 'numeric', month: 'long' })} : ticket `, h('span', { class: 'num' }, money(week.validation.montantReel)), ' pour ', h('span', { class: 'num' }, money(week.validation.estime)), ' estimés.') : null),
   );
+
+  root.append(h('div', { class: 'row-actions' },
+    h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => shareText({ title: 'Liste de courses', text: shoppingListText(week, items) }) }, icon('share'), 'Partager la liste')));
 
   if (frozen && !week.rangeAt) {
     root.append(h('button', { type: 'button', class: 'btn btn-secondary btn-block', onclick: () => rangerCourses(week, items) }, icon('box'), 'Ranger les courses dans le stock'));

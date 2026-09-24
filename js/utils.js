@@ -109,6 +109,9 @@ const ICONS = {
   flash: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/>',
   cloud: '<path d="M7 18a4 4 0 0 1-.5-8 6 6 0 0 1 11.3-1.5A4 4 0 0 1 17 18z"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>',
+  share: '<path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M16 6l-4-4-4 4M12 2v13"/>',
+  message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
 };
 export function icon(name, cls = '') {
   const span = h('span', { class: `icon ${cls}`.trim(), 'aria-hidden': 'true' });

@@ -8,8 +8,8 @@ export const SCHEMA_TEXT = `{
   "jours": [
     {
       "jour": "lundi",
-      "midi": { "nom": "Salade de lentilles", "temps": 15, "tags": ["végé", "froid"], "recette": "Étapes courtes…" },
-      "soir": { "nom": "Poulet au citron, riz", "temps": 35, "tags": [], "recette": "Étapes courtes…" }
+      "midi": { "nom": "Salade de lentilles", "temps": 15, "tags": ["végé", "froid"], "recette": "Étapes courtes…", "lien": "https://www.marmiton.org/recettes/…" },
+      "soir": { "nom": "Poulet au citron, riz", "temps": 35, "tags": [], "recette": "Étapes courtes…", "lien": null }
     }
   ],
   "courses": [
@@ -40,6 +40,7 @@ export function cleanJson(text) {
 
 const isStr = (v) => typeof v === 'string';
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+export const isUrl = (v) => typeof v === 'string' && /^https?:\/\/[^\s]+$/i.test(v.trim());
 const POUR_RE = new RegExp(`^(${DAYS.join('|')}) (midi|soir)$`);
 
 /**
@@ -113,6 +114,7 @@ export function validateMenu(obj) {
     if (m.tags !== undefined && (!Array.isArray(m.tags) || m.tags.some((t) => !isStr(t)))) wrong(`${p}.tags`, 'une liste de textes');
     if (m.recette === undefined) missing(`${p}.recette`);
     else if (!isStr(m.recette)) wrong(`${p}.recette`, 'un texte');
+    if (m.lien != null && m.lien !== '' && !isUrl(m.lien)) wrong(`${p}.lien`, 'une adresse https:// ou null');
   }
 
   if (errors.length) return { ok: false, errors };
@@ -120,7 +122,7 @@ export function validateMenu(obj) {
 }
 
 function normalize(obj) {
-  const meal = (m) => (m ? { nom: m.nom.trim(), temps: m.temps, tags: m.tags || [], recette: m.recette } : null);
+  const meal = (m) => (m ? { nom: m.nom.trim(), temps: m.temps, tags: m.tags || [], recette: m.recette, lien: isUrl(m.lien) ? m.lien.trim() : null } : null);
   return {
     semaine: obj.semaine,
     personnes: obj.personnes,
@@ -167,6 +169,7 @@ export function buildPrompt(form, budget, ecartLine, extraLines = []) {
     '- La somme des prix_estime de la liste de courses ne doit pas dépasser le budget.',
     '- Chaque article de la liste de courses indique dans "pour" les repas qui l\'utilisent.',
     '- Les recettes sont courtes : 3 à 6 étapes, sans blabla.',
+    '- Pour chaque repas, mets dans "lien" l\'adresse d\'une recette en ligne qui correspond vraiment (Marmiton, 750g, Cuisine AZ, Journal des Femmes…), uniquement si tu es sûr qu\'elle existe ; sinon null.',
     '',
     'Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ni après, sans balises markdown, en respectant exactement ce schéma :',
     '',
@@ -199,7 +202,8 @@ export const RECIPE_SCHEMA_TEXT = `{
     { "article": "Courgettes", "quantite": "2", "en_stock": true },
     { "article": "Crème fraîche", "quantite": "10 cl", "en_stock": false }
   ],
-  "recette": "1. Couper les légumes.\n2. Saisir le poulet.\n3. Ajouter les légumes, cuire 10 min."
+  "recette": "1. Couper les légumes.\n2. Saisir le poulet.\n3. Ajouter les légumes, cuire 10 min.",
+  "lien": "https://www.marmiton.org/recettes/… ou null"
 }`;
 
 /** Valide une recette seule. Retourne { ok, recipe } ou { ok: false, errors }. */
@@ -215,7 +219,7 @@ export function validateRecipe(obj) {
   return {
     ok: true,
     recipe: {
-      nom: obj.nom.trim(), temps: isNum(obj.temps) ? obj.temps : 30, tags: obj.tags || [], recette: obj.recette, personnes: Number.isInteger(obj.personnes) && obj.personnes > 0 ? obj.personnes : 2,
+      nom: obj.nom.trim(), temps: isNum(obj.temps) ? obj.temps : 30, tags: obj.tags || [], recette: obj.recette, personnes: Number.isInteger(obj.personnes) && obj.personnes > 0 ? obj.personnes : 2, lien: isUrl(obj.lien) ? obj.lien.trim() : null,
       ingredients: (obj.ingredients || []).filter((i) => i && isStr(i.article) && i.article.trim()).map((i) => ({ article: i.article.trim(), quantite: i.quantite == null ? '' : String(i.quantite), rayon: isStr(i.rayon) ? i.rayon : 'Autre', prix_estime: isNum(i.prix_estime) ? i.prix_estime : 0, enStock: !!i.en_stock })),
     },
   };
@@ -242,6 +246,7 @@ export function buildTonightPrompt({ personnes, tempsMax, regime, allergies }, s
     'Consignes :',
     '- Utilise d\'abord les produits proches de leur date limite, puis le reste du stock ; limite les achats à 3 articles maximum, marqués "en_stock": false.',
     '- Recette courte : 3 à 6 étapes, sans blabla.',
+    '- Dans "lien", l\'adresse d\'une recette en ligne qui correspond vraiment, seulement si tu es sûr qu\'elle existe ; sinon null.',
     '',
     'Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après, sans balises markdown, selon ce schéma :',
     '',

@@ -5,6 +5,9 @@ import { login, register } from '../store.js';
 import { api } from '../api.js';
 
 let mode = 'login';
+/** #rejoindre=CODE dans l'adresse : on ouvre l'inscription avec le code déjà saisi. */
+const inviteFromHash = () => { const m = location.hash.match(/rejoindre=([A-Za-z0-9-]+)/); return m ? decodeURIComponent(m[1]).toUpperCase() : ''; };
+if (inviteFromHash()) mode = 'register';
 
 export function renderLogin() {
   const root = h('section', { class: 'screen screen-onboarding' });
@@ -64,7 +67,7 @@ function registerForm() {
   const user = h('input', { type: 'text', id: 'rg-login', class: 'input', autocomplete: 'username', autocapitalize: 'none', spellcheck: 'false', placeholder: 'lettres, chiffres, point, tiret', maxlength: '32' });
   const pass = h('input', { type: 'password', id: 'rg-pass', class: 'input', autocomplete: 'new-password', placeholder: '8 caractères minimum' });
   const pass2 = h('input', { type: 'password', id: 'rg-pass2', class: 'input', autocomplete: 'new-password', placeholder: 'le même' });
-  const invit = h('input', { type: 'text', id: 'rg-invit', class: 'input', autocapitalize: 'characters', spellcheck: 'false', placeholder: 'XXXX-XXXX', maxlength: '9' });
+  const invit = h('input', { type: 'text', id: 'rg-invit', class: 'input', autocapitalize: 'characters', spellcheck: 'false', placeholder: 'XXXX-XXXX', maxlength: '9', value: inviteFromHash() });
   const nomFoyer = h('input', { type: 'text', id: 'rg-foyer', class: 'input', placeholder: 'Ex. Maison Dupont', maxlength: '60' });
   const codeServeur = h('input', { type: 'password', id: 'rg-serveur', class: 'input', autocomplete: 'off', placeholder: 'donné par la personne qui héberge' });
   const err = h('p', { class: 'form-error', role: 'alert', hidden: true });
@@ -81,7 +84,7 @@ function registerForm() {
       : [field('rg-foyer', 'Nom du foyer', nomFoyer), field('rg-serveur', 'Code serveur (si demandé)', codeServeur), serverHint]));
   }
   api('GET', '/health').then((hlt) => {
-    if (hlt.premierCompte) { join = false; joinSeg.querySelectorAll('input')[1].checked = true; drawFoyer(); serverHint.textContent = 'Premier compte de ce serveur : tu crées ton foyer, sans code.'; }
+    if (hlt.premierCompte && !inviteFromHash()) { join = false; joinSeg.querySelectorAll('input')[1].checked = true; drawFoyer(); serverHint.textContent = 'Premier compte de ce serveur : tu crées ton foyer, sans code.'; }
     else if (hlt.inscription === 'ouverte') serverHint.textContent = 'Les inscriptions sont ouvertes : aucun code serveur nécessaire.';
   }).catch(() => {});
   drawFoyer();

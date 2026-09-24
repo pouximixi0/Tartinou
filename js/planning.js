@@ -24,7 +24,7 @@ export function putMealInWeek(s, recipe, jour, moment) {
   const ref = `${jour} ${moment}`;
   // Anciens ingrédients liés à ce repas : on les détache (ou on les retire s'ils ne servaient qu'à lui).
   w.menu.courses = w.menu.courses.map((c) => ({ ...c, pour: c.pour.filter((p) => p !== ref) })).filter((c) => c.pour.length);
-  day[moment] = { nom: recipe.nom, temps: recipe.temps || 30, tags: recipe.tags || [], recette: recipe.recette || '' };
+  day[moment] = { nom: recipe.nom, temps: recipe.temps || 30, tags: recipe.tags || [], recette: recipe.recette || '', lien: recipe.lien || null };
   for (const ing of recipe.ingredients || []) {
     if (ing.enStock) continue;
     const existing = w.menu.courses.find((c) => c.article.toLowerCase() === ing.article.toLowerCase());

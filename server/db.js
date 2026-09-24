@@ -77,6 +77,9 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   id TEXT PRIMARY KEY, endpoint TEXT NOT NULL UNIQUE, p256dh TEXT NOT NULL, auth TEXT NOT NULL, label TEXT, member TEXT, created_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS push_log (key TEXT PRIMARY KEY, sent_at INTEGER);
+CREATE TABLE IF NOT EXISTS messages (
+  id TEXT PRIMARY KEY, auteur TEXT, texte TEXT NOT NULL, date TEXT NOT NULL, at INTEGER, epingle INTEGER NOT NULL DEFAULT 0, position INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS push_config (id INTEGER PRIMARY KEY CHECK (id = 1), public_key TEXT, private_key TEXT, subject TEXT);
 `;
 
@@ -95,6 +98,9 @@ const COLUMNS = [
   ['stock_items', 'magasin', 'TEXT'],
   ['stock_items', 'portions', 'REAL'],
   ['prompt_form', 'restes_dabord', 'INTEGER NOT NULL DEFAULT 0'],
+  ['recipes', 'share_id', 'TEXT'],
+  ['recipes', 'lien', 'TEXT'],
+  ['stock_journal', 'auteur', 'TEXT'],
 ];
 
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -165,14 +171,15 @@ export function readState(db) {
       })).filter((w) => w.menu),
     },
     promptForm: { personnes: pf.personnes, budget: pf.budget, regime: pf.regime, allergies: pf.allergies, tempsMax: pf.temps_max, placards: pf.placards, repas: pf.repas, restesDabord: !!pf.restes_dabord },
-    recettes: db.prepare('SELECT * FROM recipes ORDER BY position, rowid').all().map((r) => ({ id: r.id, nom: r.nom, temps: r.temps, tags: parse(r.tags, []), recette: r.recette || '', ingredients: parse(r.ingredients, []), personnes: r.personnes, ajouteLe: r.ajoute_le })),
+    recettes: db.prepare('SELECT * FROM recipes ORDER BY position, rowid').all().map((r) => ({ id: r.id, nom: r.nom, temps: r.temps, tags: parse(r.tags, []), recette: r.recette || '', ingredients: parse(r.ingredients, []), personnes: r.personnes, ajouteLe: r.ajoute_le, partage: r.share_id, lien: r.lien })),
+    messages: db.prepare('SELECT * FROM messages ORDER BY position, rowid').all().map((m) => ({ id: m.id, auteur: m.auteur, texte: m.texte, date: m.date, at: m.at, epingle: !!m.epingle })),
     stock: {
       items: db.prepare('SELECT * FROM stock_items ORDER BY position, rowid').all().map((i) => ({
         id: i.id, code: i.code, nom: i.nom, marque: i.marque, conditionnement: i.conditionnement, qte: i.qte, unite: i.unite, emplacement: i.emplacement, categorie: i.categorie,
         dlc: i.dlc, ddm: !!i.ddm, ouvertLe: i.ouvert_le, ajouteLe: i.ajoute_le, prix: i.prix, seuilMin: i.seuil_min, image: i.image, notes: i.notes, magasin: i.magasin, portions: i.portions,
       })),
       products,
-      journal: db.prepare('SELECT * FROM stock_journal ORDER BY at, rowid').all().map((j) => ({ id: j.id, date: j.date, at: j.at, type: j.type, nom: j.nom, qte: j.qte, unite: j.unite, prix: j.prix, code: j.code, categorie: j.categorie })),
+      journal: db.prepare('SELECT * FROM stock_journal ORDER BY at, rowid').all().map((j) => ({ id: j.id, date: j.date, at: j.at, type: j.type, nom: j.nom, qte: j.qte, unite: j.unite, prix: j.prix, code: j.code, categorie: j.categorie, auteur: j.auteur })),
       aRacheter: db.prepare('SELECT * FROM a_racheter ORDER BY position, rowid').all().map((r) => ({ id: r.id, nom: r.nom, code: r.code, qte: r.qte, unite: r.unite, auto: !!r.auto, ajouteLe: r.ajoute_le })),
       prixHistorique: db.prepare('SELECT * FROM price_history ORDER BY date, rowid').all().map((p) => ({ id: p.id, code: p.code, nom: p.nom, magasin: p.magasin, prix: p.prix, unite: p.unite, date: p.date })),
     },
@@ -229,8 +236,14 @@ const writers = {
   recettes(db, list) {
     if (!Array.isArray(list)) throw new Error('recettes invalide');
     db.exec('DELETE FROM recipes');
-    const ins = db.prepare('INSERT INTO recipes (id, nom, temps, tags, recette, ingredients, personnes, ajoute_le, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    list.forEach((r, i) => ins.run(str(r.id), str(r.nom, 'Recette'), int(r.temps, 0), json(r.tags, []), str(r.recette), json(r.ingredients, []), Math.max(1, int(r.personnes, 2)), nullable(str(r.ajouteLe)), i));
+    const ins = db.prepare('INSERT INTO recipes (id, nom, temps, tags, recette, ingredients, personnes, ajoute_le, share_id, lien, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    list.forEach((r, i) => ins.run(str(r.id), str(r.nom, 'Recette'), int(r.temps, 0), json(r.tags, []), str(r.recette), json(r.ingredients, []), Math.max(1, int(r.personnes, 2)), nullable(str(r.ajouteLe)), nullable(str(r.partage)), nullable(str(r.lien)), i));
+  },
+  messages(db, list) {
+    if (!Array.isArray(list)) throw new Error('messages invalide');
+    db.exec('DELETE FROM messages');
+    const ins = db.prepare('INSERT INTO messages (id, auteur, texte, date, at, epingle, position) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    list.forEach((m, i) => ins.run(str(m.id), nullable(str(m.auteur)), str(m.texte).slice(0, 500), str(m.date), int(m.at, 0), bool(m.epingle), i));
   },
   stock(db, st) {
     if (!st || typeof st !== 'object') throw new Error('stock invalide');
@@ -248,8 +261,8 @@ const writers = {
         p.nova == null ? null : int(p.nova), nullable(str(p.ecoscore)), json(p.allergenes, []), json(p.labels, []), str(p.ingredients), p.nutriments ? json(p.nutriments) : null, str(p.source, 'off'), int(p.fetchedAt, 0));
     }
     db.exec('DELETE FROM stock_journal');
-    const insJ = db.prepare('INSERT INTO stock_journal (id, date, at, type, nom, qte, unite, prix, code, categorie) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    for (const j of Array.isArray(st.journal) ? st.journal : []) insJ.run(str(j.id), str(j.date), int(j.at, 0), str(j.type), str(j.nom), num(j.qte), nullable(str(j.unite)), numOrNull(j.prix), nullable(str(j.code)), nullable(str(j.categorie)));
+    const insJ = db.prepare('INSERT INTO stock_journal (id, date, at, type, nom, qte, unite, prix, code, categorie, auteur) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    for (const j of Array.isArray(st.journal) ? st.journal : []) insJ.run(str(j.id), str(j.date), int(j.at, 0), str(j.type), str(j.nom), num(j.qte), nullable(str(j.unite)), numOrNull(j.prix), nullable(str(j.code)), nullable(str(j.categorie)), nullable(str(j.auteur)));
     db.exec('DELETE FROM a_racheter');
     const insR = db.prepare('INSERT INTO a_racheter (id, nom, code, qte, unite, auto, ajoute_le, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     (Array.isArray(st.aRacheter) ? st.aRacheter : []).forEach((r, k) => insR.run(str(r.id), str(r.nom), nullable(str(r.code)), num(r.qte, 1), str(r.unite, 'piece'), bool(r.auto), nullable(str(r.ajouteLe)), k));
@@ -271,9 +284,17 @@ export function writeCollections(db, body) {
 
 export function resetAll(db) {
   transaction(db, () => {
-    for (const t of ['manual_items', 'menu_weeks', 'expenses', 'categories', 'charges_fixes', 'stock_items', 'products', 'stock_journal', 'a_racheter', 'price_history', 'recipes', 'push_log']) db.exec(`DELETE FROM ${t}`);
+    for (const t of ['manual_items', 'menu_weeks', 'expenses', 'categories', 'charges_fixes', 'stock_items', 'products', 'stock_journal', 'a_racheter', 'price_history', 'recipes', 'messages', 'push_log']) db.exec(`DELETE FROM ${t}`);
     db.exec('DELETE FROM settings; DELETE FROM prompt_form; INSERT INTO settings (id) VALUES (1); INSERT INTO prompt_form (id) VALUES (1);');
   });
+}
+
+/* ---------- Messages et recettes publiques ---------- */
+export const messageIds = (db) => new Set(db.prepare('SELECT id FROM messages').all().map((m) => m.id));
+export const messageById = (db, id) => db.prepare('SELECT * FROM messages WHERE id = ?').get(id) || null;
+export function publicRecipe(db, shareId) {
+  const r = db.prepare('SELECT * FROM recipes WHERE share_id = ?').get(shareId);
+  return r ? { nom: r.nom, temps: r.temps, tags: parse(r.tags, []), recette: r.recette || '', ingredients: parse(r.ingredients, []), personnes: r.personnes, lien: r.lien || null } : null;
 }
 
 /* ---------- Membres (codes d'accès supplémentaires) ---------- */

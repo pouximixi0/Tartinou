@@ -39,7 +39,7 @@ export function openTonightSheet() {
     update((s) => {
       putMealInWeek(s, res.recipe, jour, moment);
       if (favBox.checked && !s.recettes.some((r) => r.nom.toLowerCase() === res.recipe.nom.toLowerCase())) {
-        s.recettes.push({ id: uid(), nom: res.recipe.nom, temps: res.recipe.temps, tags: res.recipe.tags, recette: res.recipe.recette, ingredients: res.recipe.ingredients.map(({ article, quantite, rayon, prix_estime }) => ({ article, quantite, rayon, prix_estime })), personnes: res.recipe.personnes, ajouteLe: todayISO() });
+        s.recettes.push({ id: uid(), nom: res.recipe.nom, temps: res.recipe.temps, tags: res.recipe.tags, recette: res.recipe.recette, lien: res.recipe.lien || null, ingredients: res.recipe.ingredients.map(({ article, quantite, rayon, prix_estime }) => ({ article, quantite, rayon, prix_estime })), personnes: res.recipe.personnes, ajouteLe: todayISO() });
       }
     });
     toast(`${res.recipe.nom} mis au menu de ${quand()}`);

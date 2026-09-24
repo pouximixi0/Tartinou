@@ -8,6 +8,7 @@ import { expenseList } from '../components/expense-row.js';
 import { openExpenseSheet } from '../components/expense-sheet.js';
 import { stockSummary } from '../stock.js';
 import { objectifsStatus } from '../finance.js';
+import { wallZone } from '../components/wall.js';
 
 export function renderToday() {
   const state = getState();
@@ -78,6 +79,8 @@ export function renderToday() {
         h('button', { type: 'button', class: 'link', onclick: () => openExpenseSheet() }, 'Ajouter une dépense.')),
     );
   }
+
+  root.append(wallZone(state));
 
   if (b.configured) {
     root.append(h('p', { class: 'streak muted small' },

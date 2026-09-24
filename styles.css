@@ -536,3 +536,29 @@ dialog.sheet-compact::before { content: ''; display: block; width: 36px; height:
 .link-plain { background: none; border: 0; padding: 0; text-align: left; color: inherit; font: inherit; cursor: pointer; }
 .recipe-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .recipe-head .h-small { margin: 0; }
+
+.source-link { display: inline-flex; align-items: center; gap: 6px; color: var(--cuisine); font-weight: 600; text-decoration: none; padding: 6px 0; }
+.source-link:hover { text-decoration: underline; }
+
+/* ---------- Mur du foyer et activité ---------- */
+.zone-tools { display: inline-flex; gap: 12px; margin-left: auto; }
+.zone-tools .link { min-height: 0; }
+.wall-list { display: flex; flex-direction: column; gap: 8px; }
+.wall-msg { background: var(--surface-2); border-radius: var(--r); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.wall-msg.is-pinned { background: var(--accent-soft); }
+.wall-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wall-author { font-weight: 700; font-size: 0.9rem; }
+.wall-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.wall-actions { display: flex; gap: 14px; }
+.wall-actions .link { min-height: 32px; }
+.wall-composer { display: flex; gap: 8px; }
+.wall-composer .input { flex: 1; }
+.wall-composer .btn { flex: none; padding: 10px 14px; }
+.feed { display: flex; flex-direction: column; }
+.feed-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.feed-item:last-child { border-bottom: 0; }
+.feed-item .icon { color: var(--muted); margin-top: 2px; }
+.feed-item.is-bad .icon { color: var(--danger); }
+.feed-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.feed-time { flex: none; }
+@media (min-width: 1180px) { .screen-today > .wall { grid-column: 2; } }

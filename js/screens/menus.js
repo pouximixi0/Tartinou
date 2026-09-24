@@ -8,6 +8,7 @@ import { openRecipe, mealLabel, openFavoriteRecipe } from '../components/recipe.
 import { stockPromptLines } from '../stock.js';
 import { openTonightSheet } from '../components/tonight-sheet.js';
 import { putMealInWeek, todayDayName } from '../planning.js';
+import { shareText, menuText, recipeText, recipeUrl, newShareId } from '../share.js';
 
 const ui = { importText: '', importErrors: [] };
 
@@ -29,7 +30,8 @@ export function renderMenus() {
     promptZone(state, b), importZone(state, week));
   if (week) root.append(weekZone(week));
   root.append(h('div', { class: 'row-actions' },
-    h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => openHistory() }, icon('clock'), 'Historique')));
+    h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => openHistory() }, icon('clock'), 'Historique'),
+    week ? h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => shareText({ title: 'Menus de la semaine', text: menuText(week) }) }, icon('share'), 'Partager le menu') : null));
   root.append(favoritesZone(state));
   return root;
 }
@@ -259,6 +261,16 @@ function restesLine(state) {
   return `PRIORITÉ ABSOLUE : construis les repas des trois premiers jours autour de ce qui doit être consommé vite. ${urgent || 'Rien ne périme dans les trois jours.'} ${restes}`.trim();
 }
 
+/* ---------- Partager une recette : lien public + texte ---------- */
+function shareRecipe(r) {
+  let shareId = r.partage;
+  if (!shareId) {
+    shareId = newShareId();
+    update((s) => { const x = s.recettes.find((y) => y.id === r.id); if (x) x.partage = shareId; });
+  }
+  shareText({ title: r.nom, text: recipeText(r), url: recipeUrl(shareId) });
+}
+
 /* ---------- Recettes favorites ---------- */
 function favoritesZone(state) {
   const list = state.recettes;
@@ -287,6 +299,7 @@ function favoritesZone(state) {
         ? h('ul', { class: 'rows' }, list.map((r) => h('li', { class: 'row-item' },
             h('button', { type: 'button', class: 'row-text link-plain', onclick: () => openFavoriteRecipe(r, { onPlan: plan }) }, r.nom, h('span', { class: 'muted small block' }, `${r.temps || '?'} min · ${(r.ingredients || []).length} ingrédient${(r.ingredients || []).length > 1 ? 's' : ''}${r.tags?.length ? ` · ${r.tags.slice(0, 3).join(', ')}` : ''}`)),
             h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => plan(r) }, 'Au menu'),
+            h('button', { type: 'button', class: 'btn-icon', 'aria-label': `Partager ${r.nom}`, onclick: () => shareRecipe(r) }, icon('share')),
             h('button', { type: 'button', class: 'btn-icon', 'aria-label': `Retirer ${r.nom} des favoris`, onclick: async () => { const ok = await confirmDialog({ title: `Retirer « ${r.nom} » ?`, message: 'La recette disparaît des favoris.', confirmLabel: 'Retirer', danger: true }); if (ok) update((s) => { s.recettes = s.recettes.filter((x) => x.id !== r.id); }); } }, icon('trash')))))
         : h('p', { class: 'muted small' }, 'Depuis une fiche recette, « Favoris » la garde ici pour la remettre au menu en un geste, sans repasser par le prompt.')));
 }

@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { openDb, readState, writeCollections, resetAll, upsertSubscription, removeSubscription, listSubscriptions } from './db.js';
+import { openDb, readState, writeCollections, resetAll, upsertSubscription, removeSubscription, listSubscriptions, messageIds, messageById, publicRecipe } from './db.js';
 import * as A from './auth.js';
 import { generateVapidKeys } from './webpush.js';
 import { notifyFoyer, broadcast } from './notify.js';
@@ -166,6 +166,10 @@ function foyerView(foyer, user) {
 async function handleApi(req, res, url) {
   const route = `${req.method} ${url.pathname}`;
   if (route === 'GET /api/health') return send(res, 200, { ok: true, foyers: A.listFoyers(accounts).length, inscription: OPEN_SIGNUP ? 'ouverte' : 'invitation', premierCompte: A.countUsers(accounts) === 0 });
+  if (req.method === 'GET' && url.pathname.startsWith('/api/public/recette/')) {
+    const found = findPublicRecipe(url.pathname.slice('/api/public/recette/'.length));
+    return found ? send(res, 200, found) : fail(res, 404, 'Recette introuvable ou partage retiré.');
+  }
   if (url.pathname.startsWith('/api/auth/')) {
     if (route === 'POST /api/auth/logout') { A.deleteSession(accounts, bearer(req, url)); return send(res, 200, { ok: true }); }
     if (route !== 'POST /api/auth/password') return handleAuth(req, res, url, route);
@@ -211,9 +215,17 @@ async function handleApi(req, res, url) {
   if (route === 'PUT /api/state' || route === 'PATCH /api/state') {
     let body; try { body = await readJson(req); } catch (err) { return fail(res, 400, `JSON illisible : ${err.message}`); }
     try {
+      const before = Array.isArray(body.messages) ? messageIds(db) : null;
       const written = writeCollections(db, body);
       const at = Date.now();
       emitChange(foyer.id, { written, at, by: user.nom, client: String(req.headers['x-client-id'] || '') });
+      if (before) {
+        const fresh = body.messages.filter((m) => m && m.id && !before.has(m.id) && m.auteur === user.nom).slice(-3);
+        for (const m of fresh) {
+          const subs = listSubscriptions(db).filter((s) => s.member !== user.nom);
+          notifyMembers(subs, { title: `${user.nom} · mur du foyer`, body: String(m.texte).slice(0, 140), url: '#aujourdhui', tag: `msg-${m.id}` });
+        }
+      }
       return send(res, 200, { ok: true, written, at });
     } catch (err) { return fail(res, 400, err.message); }
   }
@@ -254,6 +266,31 @@ async function handleApi(req, res, url) {
   return fail(res, 404, 'Route inconnue');
 }
 
+/* ---------- Recettes publiques (lien partagé) ---------- */
+function findPublicRecipe(shareId) {
+  if (!/^[A-Za-z0-9_-]{6,40}$/.test(shareId)) return null;
+  for (const f of A.listFoyers(accounts)) {
+    const r = publicRecipe(dbFor(f.id), shareId);
+    if (r) return { ...r, foyer: f.nom, partage: shareId };
+  }
+  return null;
+}
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function recipePage(r, shareId) {
+  const steps = String(r.recette || '').split(/\n+/).map((s) => s.trim()).filter(Boolean);
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(r.nom)} · Tartinou</title>
+<meta property="og:title" content="${esc(r.nom)}"><meta property="og:description" content="Recette partagée depuis Tartinou · ${r.temps || '?'} min · ${r.personnes || 2} pers."><link rel="icon" href="/icons/icon-192.png">
+<style>body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;background:#F4F3EF;color:#17160F;margin:0;padding:24px 16px 48px;line-height:1.45}main{max-width:560px;margin:0 auto}h1{font-size:1.6rem;letter-spacing:-.02em;margin:0 0 4px}.muted{color:#74726A}.card{background:#fff;border:1px solid #E2E0D9;border-radius:16px;padding:16px 18px;margin:14px 0}ul,ol{padding-left:20px;margin:6px 0}li{margin:4px 0}.btn{display:inline-block;background:#17160F;color:#F7F6F2;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:600;margin-top:8px}.brand{display:flex;align-items:center;gap:8px;font-weight:800;margin-bottom:18px}.brand img{width:28px;height:28px;border-radius:7px}
+@media(prefers-color-scheme:dark){body{background:#121211;color:#EEECE6}.card{background:#1C1B19;border-color:#2C2B28}.muted{color:#948F85}.btn{background:#EEECE6;color:#121211}}</style></head><body><main>
+<div class="brand"><img src="/icons/icon-192.png" alt="">Tartinou</div>
+<h1>${esc(r.nom)}</h1><p class="muted">${r.temps || '?'} min · ${r.personnes || 2} personne${(r.personnes || 2) > 1 ? 's' : ''}${r.tags?.length ? ' · ' + esc(r.tags.join(', ')) : ''} · partagée par ${esc(r.foyer)}</p>
+${r.ingredients?.length ? `<section class="card"><strong>Ingrédients</strong><ul>${r.ingredients.map((i) => `<li>${esc(i.article)}${i.quantite ? ' · ' + esc(i.quantite) : ''}</li>`).join('')}</ul></section>` : ''}
+<section class="card"><strong>Recette</strong>${steps.length > 1 ? `<ol>${steps.map((s) => `<li>${esc(s.replace(/^\d+[.)]\s*/, ''))}</li>`).join('')}</ol>` : `<p>${esc(r.recette)}</p>`}</section>
+${r.lien ? `<p><a href="${esc(r.lien)}" target="_blank" rel="noopener noreferrer">Voir la recette d'origine</a></p>` : ''}
+<a class="btn" href="/#recette=${esc(shareId)}">Ajouter à mes recettes Tartinou</a>
+<p class="muted" style="font-size:.9rem">Tartinou : dépenses, menus et stock alimentaire, sur ton propre serveur.</p></main></body></html>`;
+}
+
 /* ---------- Fichiers statiques ---------- */
 function serveStatic(req, res, url) {
   let p = decodeURIComponent(url.pathname);
@@ -280,6 +317,12 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url);
+    if (req.method === 'GET' && url.pathname.startsWith('/p/r/')) {
+      const found = findPublicRecipe(url.pathname.slice('/p/r/'.length));
+      if (!found) return send(res, 404, 'Recette introuvable ou partage retiré.');
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(recipePage(found, found.partage));
+    }
     if (!SERVE_STATIC) return send(res, 404, 'Introuvable');
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Méthode non autorisée');
     return serveStatic(req, res, url);
@@ -288,6 +331,18 @@ const server = http.createServer(async (req, res) => {
     return fail(res, 500, 'Erreur interne');
   }
 });
+
+/* ---------- Notification directe à des abonnés ---------- */
+async function notifyMembers(subs, payload) {
+  for (const s of subs) {
+    try {
+      const { sendPush } = await import('./webpush.js');
+      const r = await sendPush({ endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth }, payload, VAPID);
+      if (r.status === 404 || r.status === 410) removeSubscription(dbForSub(s), s.endpoint);
+    } catch (err) { console.warn('push message', err.message); }
+  }
+}
+function dbForSub(sub) { for (const [id, db] of foyerDbs) if (listSubscriptions(db).some((x) => x.endpoint === sub.endpoint)) return db; return null; }
 
 /* ---------- Notifications planifiées ---------- */
 async function tick() {

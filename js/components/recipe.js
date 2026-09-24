@@ -8,6 +8,13 @@ import { stepper } from './stepper.js';
 
 export const mealLabel = (jour, moment) => `${capitalize(jour)} ${moment}`;
 
+/** Lien vers la recette d'origine (Marmiton, 750g…), ouvert dans un nouvel onglet. */
+export function sourceLink(url) {
+  let host = '';
+  try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
+  return h('a', { class: 'source-link', href: url, target: '_blank', rel: 'noopener noreferrer' }, icon('link'), `Voir la recette sur ${host}`);
+}
+
 export function findMeal(menu, jour, moment) {
   const day = menu.jours.find((j) => j.jour === jour);
   return day ? day[moment] : null;
@@ -52,7 +59,7 @@ export function openRecipe(week, jour, moment) {
   }
   function favorite() {
     if (isFav) { toast('Déjà dans tes recettes favorites'); return; }
-    update((s) => { s.recettes.push({ id: uid(), nom: meal.nom, temps: meal.temps, tags: [...meal.tags], recette: meal.recette, ingredients: ingredients.map((c) => ({ article: c.article, quantite: c.quantite, rayon: c.rayon, prix_estime: c.prix_estime })), personnes: base, ajouteLe: todayISO() }); });
+    update((s) => { s.recettes.push({ id: uid(), nom: meal.nom, temps: meal.temps, tags: [...meal.tags], recette: meal.recette, lien: meal.lien || null, ingredients: ingredients.map((c) => ({ article: c.article, quantite: c.quantite, rayon: c.rayon, prix_estime: c.prix_estime })), personnes: base, ajouteLe: todayISO() }); });
     toast('Recette ajoutée aux favoris');
     dlg.close();
   }
@@ -62,6 +69,7 @@ export function openRecipe(week, jour, moment) {
     cls: 'sheet-compact',
     content: [
       h('p', { class: 'muted' }, `${mealLabel(jour, moment)} · ${meal.temps} min${tags}`, cooked ? h('span', { class: 'tag-stock' }, 'cuisiné') : null),
+      meal.lien ? sourceLink(meal.lien) : null,
       ingredients.length
         ? h('section', null,
             h('div', { class: 'recipe-head' }, h('h3', { class: 'h-small' }, 'Ingrédients'), pers),
@@ -89,6 +97,7 @@ export function openFavoriteRecipe(recipe, { onPlan } = {}) {
     cls: 'sheet-compact',
     content: [
       h('p', { class: 'muted' }, `${recipe.temps || '?'} min${recipe.tags?.length ? ` · ${recipe.tags.join(', ')}` : ''} · ${recipe.personnes || 2} pers.`),
+      recipe.lien ? sourceLink(recipe.lien) : null,
       recipe.ingredients?.length ? h('section', null, h('h3', { class: 'h-small' }, 'Ingrédients'), h('ul', { class: 'plain-list' }, recipe.ingredients.map((c) => h('li', null, `${c.article}${c.quantite ? ` · ${c.quantite}` : ''}`)))) : null,
       h('section', null, h('h3', { class: 'h-small' }, 'Recette'), steps.length > 1 ? h('ol', { class: 'steps' }, steps.map((s) => h('li', null, s.replace(/^\d+[.)]\s*/, '')))) : h('p', null, recipe.recette || '')),
     ],

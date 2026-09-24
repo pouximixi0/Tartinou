@@ -12,7 +12,8 @@ Depuis la v2, toutes les données vivent dans des **bases SQLite sur ton serveur
 - **Courses** : liste par rayon, « en stock » signalé, validation du ticket, « Ranger les courses », « À racheter ».
 - **Stock** : scan (caméra, photo, saisie, étiquettes QR maison), Open Food Facts, DLC/DDM, emplacements, prix par magasin avec historique (« plus cher que la dernière fois »), allergènes du foyer signalés, portions restantes, mode rangement (inventaire guidé), anti-gaspi (journal, statistiques sur six mois, euros gaspillés), étiquettes QR à imprimer.
 - **Notifications** (Web Push, sans dépendance) : dates limites du jour, bilan hebdomadaire le dimanche, bilan mensuel en fin de cycle, objectifs à 80 % et 100 %. Heure et contenus réglables, par appareil.
-- **Comptes et foyer** : inscription, connexion, code d'invitation, membres, administrateur, changement de mot de passe.
+- **Comptes et foyer** : inscription, connexion, code d'invitation (partageable par lien), membres, administrateur, changement de mot de passe.
+- **Social** : mur du foyer (petits mots épinglables, notifiés aux autres membres), fil d'activité (qui a ajouté, jeté, cuisiné, dépensé), partage de la liste de courses, du menu et des recettes (texte ou lien public `/p/r/<id>` importable en un clic), lien vers la recette d'origine (Marmiton, 750g…) demandé dans le prompt et cliquable dans la fiche.
 
 ## Lancer en local
 

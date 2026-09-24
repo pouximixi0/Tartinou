@@ -163,8 +163,11 @@ export function sortItems(items, mode = 'dlc') {
 }
 
 /* ---------- Mutateurs ---------- */
+let actor = null;
+/** Prénom de la personne connectée, inscrit dans le journal. */
+export const setActor = (nom) => { actor = nom || null; };
 function journal(s, type, item, qte) {
-  s.stock.journal.push({ id: uid(), date: todayISO(), at: Date.now(), type, nom: item.nom, qte: round2(qte), unite: item.unite, prix: item.prix ?? null, code: item.code || null, categorie: item.categorie || null });
+  s.stock.journal.push({ id: uid(), date: todayISO(), at: Date.now(), type, nom: item.nom, qte: round2(qte), unite: item.unite, prix: item.prix ?? null, code: item.code || null, categorie: item.categorie || null, auteur: actor });
   if (s.stock.journal.length > 1000) s.stock.journal.splice(0, s.stock.journal.length - 1000);
 }
 

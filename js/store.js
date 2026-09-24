@@ -4,11 +4,12 @@
 // Les autres appareils du foyer sont prévenus en temps réel (SSE) et se mettent à jour.
 import { todayISO } from './utils.js';
 import { api, getToken, setToken, getClientId } from './api.js';
+import { setActor } from './stock.js';
 
 export const STORAGE_KEY = 'foyer:v2';
 const LEGACY_KEY = 'foyer:v1';
 export const SCHEMA_VERSION = 2;
-export const COLLECTIONS = ['settings', 'categories', 'expenses', 'menus', 'promptForm', 'recettes', 'stock'];
+export const COLLECTIONS = ['settings', 'categories', 'expenses', 'menus', 'promptForm', 'recettes', 'stock', 'messages'];
 
 export const DEFAULT_CATEGORIES = [
   { id: 'courses', nom: 'Courses', couleur: '#3A7D44' },
@@ -44,6 +45,7 @@ export function defaultState() {
     promptForm: { personnes: 2, budget: '', regime: '', allergies: '', tempsMax: 30, placards: '', repas: 'midi-soir-7', restesDabord: false },
     recettes: [],
     stock: { items: [], products: {}, journal: [], aRacheter: [], prixHistorique: [] },
+    messages: [],
   };
 }
 
@@ -80,6 +82,7 @@ export function migrate(raw) {
   if (!Array.isArray(out.menus.weeks)) out.menus.weeks = [];
   for (const w of out.menus.weeks) { w.checked = w.checked || {}; w.unavailable = w.unavailable || {}; w.manualItems = w.manualItems || []; w.cooked = w.cooked || {}; }
   if (!Array.isArray(out.recettes)) out.recettes = [];
+  if (!Array.isArray(out.messages)) out.messages = [];
   if (!Array.isArray(out.stock.items)) out.stock.items = [];
   if (!out.stock.products || typeof out.stock.products !== 'object') out.stock.products = {};
   if (!Array.isArray(out.stock.journal)) out.stock.journal = [];
@@ -237,6 +240,7 @@ export async function initStore() {
   sync.user = me.user;
   sync.foyer = me.foyer;
   sync.push = me.push;
+  setActor(me.user.nom);
   // Le cache local appartient à un autre foyer (autre compte sur cet appareil) : on repart de zéro.
   if (sync.foyerId && sync.foyerId !== me.foyer.id && !sync.legacy) {
     state = defaultState();

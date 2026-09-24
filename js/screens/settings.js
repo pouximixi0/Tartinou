@@ -8,6 +8,7 @@ import { confirmDialog, openDialog } from '../components/dialog.js';
 import { canInstall, promptInstall, onInstallable, isIOS, isStandalone } from '../install.js';
 import { detectRecurring, parseBankCsv, matchBankRows, guessCategoryId } from '../finance.js';
 import { pushSupported, isStandaloneIOS, currentSubscription, subscribeDevice, unsubscribeDevice } from '../push.js';
+import { shareText, inviteUrl } from '../share.js';
 
 export const ALLERGENES = ['lait', 'gluten', 'œufs', 'fruits à coque', 'arachides', 'soja', 'poisson', 'crustacés', 'mollusques', 'céleri', 'moutarde', 'sésame', 'sulfites', 'lupin'];
 
@@ -293,7 +294,7 @@ function accountZone() {
         try { await api('DELETE', `/members/${m.id}`); await refreshMe(); drawFoyer(); toast(`${m.nom} retiré du foyer`); } catch (e) { toast(e.message); }
       } }, icon('trash')) : null)));
     codeLine.replaceChildren(...(f.codeInvitation
-      ? ['Code d’invitation : ', h('strong', { class: 'num code-invit' }, f.codeInvitation), ' ', h('button', { type: 'button', class: 'link small', onclick: async () => { try { await navigator.clipboard.writeText(f.codeInvitation); toast('Code copié'); } catch { toast(f.codeInvitation); } } }, 'copier')]
+      ? ['Code d’invitation : ', h('strong', { class: 'num code-invit' }, f.codeInvitation), ' ', h('button', { type: 'button', class: 'link small', onclick: () => shareText({ title: 'Rejoins mon foyer sur Tartinou', text: `Rejoins mon foyer « ${f.nom} » sur Tartinou avec le code ${f.codeInvitation}.`, url: inviteUrl(f.codeInvitation) }) }, icon('share'), 'partager le lien')]
       : ['Le code d’invitation est visible par l’administrateur du foyer.']));
   }
   drawFoyer();
