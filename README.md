@@ -1,0 +1,78 @@
+# Tartinou
+
+Tartinou est une application personnelle (PWA) qui réunit le suivi des dépenses quotidiennes, les menus de la semaine et le **stock alimentaire** (scan des codes-barres, dates limites, anti-gaspi).
+
+Depuis la v2, toutes les données vivent dans une **base SQLite sur ton serveur** (`server/`), exposée par une petite API sans dépendance npm. Le téléphone garde une copie locale (`localStorage`, clé `foyer:v2`) pour démarrer instantanément et fonctionner hors ligne : les modifications faites sans réseau partent dès la reconnexion.
+
+## Lancer en local
+
+Node ≥ 22.13 (SQLite intégré, `node:sqlite`). Aucune installation.
+
+```
+npm start
+# → http://127.0.0.1:3311  (API ouverte, base dans ./data/foyer.db)
+```
+
+Le serveur sert aussi les fichiers de l'app. Pour tester le rendu mobile, utilise l'émulation d'appareil du navigateur (380 px de large). La caméra exige HTTPS ou `localhost`.
+
+Régénérer les icônes après un changement de palette : `npm run icons`.
+
+## Déployer sur le serveur (life.pouximixi.fr)
+
+nginx sert les fichiers statiques et relaie `/api/` vers le service Node (port 3311, base dans `/var/lib/foyer/foyer.db`, code d'accès dans `/etc/foyer.env`).
+
+```
+# 1. Fichiers
+tar czf - --exclude=docs --exclude=data index.html styles.css app.js manifest.json sw.js README.md package.json js icons scripts server \
+  | ssh -i ~/.ssh/pronote_ics_deploy root@100.105.207.97 'mkdir -p /var/www/life && tar xzf - -C /var/www/life && chown -R root:root /var/www/life'
+
+# 2. Première installation seulement : service, code d'accès, nginx
+ssh -i ~/.ssh/pronote_ics_deploy root@100.105.207.97 '
+  mkdir -p /var/lib/foyer && chown www-data:www-data /var/lib/foyer
+  [ -f /etc/foyer.env ] || echo "FOYER_TOKEN=$(node /var/www/life/server/index.js --make-token)" > /etc/foyer.env
+  chmod 600 /etc/foyer.env
+  cp /var/www/life/server/foyer.service /etc/systemd/system/foyer.service
+  systemctl daemon-reload && systemctl enable --now foyer
+  cp /var/www/life/server/nginx-life.conf /etc/nginx/sites-available/life && nginx -t && systemctl reload nginx
+  cat /etc/foyer.env'
+
+# 3. Mises à jour suivantes : étape 1, puis
+ssh -i ~/.ssh/pronote_ics_deploy root@100.105.207.97 'systemctl restart foyer'
+```
+
+À chaque déploiement, incrémente `VERSION` dans `sw.js` pour que les appareils déjà installés récupèrent les nouveaux fichiers. Au premier lancement, l’app demande le **code d'accès** (la valeur de `FOYER_TOKEN`) ; il est mémorisé sur l'appareil. Un téléphone qui avait l'ancienne version 100 % locale envoie ses données au serveur si celui-ci est vide.
+
+Variables du serveur : `PORT` (3311), `HOST` (127.0.0.1), `FOYER_DB`, `FOYER_TOKEN`, `FOYER_STATIC=0` pour ne servir que l'API (c'est le cas derrière nginx).
+
+## API
+
+- `GET /api/health` : état du service.
+- `GET /api/state` : l'état complet (settings, categories, expenses, menus, promptForm, stock).
+- `PUT /api/state` : corps `{ expenses: […], stock: {…} }` — chaque collection présente remplace la sienne, dans une transaction.
+- `POST /api/reset` : vide la base.
+
+Toutes les routes sauf `health` exigent `Authorization: Bearer <FOYER_TOKEN>` quand le token est défini. Tables : `settings`, `charges_fixes`, `prompt_form`, `categories`, `expenses`, `menu_weeks`, `manual_items`, `stock_items`, `products`, `stock_journal`, `a_racheter` (voir `server/db.js`).
+
+## Stock alimentaire
+
+Onglet **Stock** : scanner un code-barres (caméra, photo ou saisie), Open Food Facts remplit nom, marque, image et scores ; tu choisis l'emplacement (frigo, congélateur, placard) et la date limite. Détails du fonctionnement, des intégrations (Aujourd'hui, Menus, Courses) et des idées à venir dans [docs/PLAN-STOCK.md](docs/PLAN-STOCK.md).
+
+Services externes : Open Food Facts (seul le code-barres est envoyé), jsDelivr pour le lecteur ZXing quand le navigateur n'a pas `BarcodeDetector`, images produit sur `images.openfoodfacts.org`.
+
+## Sauvegarder ses données
+
+Réglages → Sauvegarde → **Exporter mes données** télécharge `tartinou-AAAA-MM-JJ.json`. **Importer une sauvegarde** remplace tout (sur le serveur aussi) après confirmation. Le fichier contient un champ `version` : la fonction `migrate()` de `js/store.js` convertit les anciens formats. Pense aussi à sauvegarder `/var/lib/foyer/foyer.db` côté serveur.
+
+## Règle du report sur un cycle partiellement suivi
+
+Le max ajusté du jour vaut `(enveloppe − dépenses du cycle + dépenses du jour) / jours restants`. Si l'app a été installée (ou la première dépense saisie) en cours de cycle, seule la part de l'enveloppe qui couvre les jours suivis est prise en compte : `enveloppe × joursSuivis / joursDuCycle`. Sans cela, les jours non saisis seraient crédités comme des économies. Pour un cycle entièrement suivi, la formule est inchangée.
+
+## Structure
+
+- `index.html`, `styles.css`, `app.js` (routeur, pastille de synchronisation) ; `manifest.json`, `sw.js`.
+- `server/index.js` (HTTP + API), `server/db.js` (schéma et lecture/écriture SQLite), `server/foyer.service`, `server/nginx-life.conf`.
+- `js/store.js` : état, cache local, file d'attente et synchronisation ; `js/api.js` : client HTTP et code d'accès.
+- `js/budget.js` : `computeBudget()` alimente Aujourd'hui, Dépenses et le budget courses.
+- `js/menu-schema.js` : validation stricte du JSON de menu et assemblage du prompt.
+- `js/stock.js` : modèle du stock, dates limites, suggestions, journal ; `js/off.js` : Open Food Facts ; `js/scanner.js` : caméra et lecture des codes.
+- `js/screens/` : un module par écran ; `js/components/` : jauge, feuille de saisie, dialogues, recette, stepper, fiche produit, « Ranger les courses ».

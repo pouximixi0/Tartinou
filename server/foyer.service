@@ -1,0 +1,30 @@
+# Unité systemd pour le serveur Foyer.
+#   sudo cp server/foyer.service /etc/systemd/system/foyer.service
+#   sudo mkdir -p /var/lib/foyer && sudo chown www-data:www-data /var/lib/foyer
+#   echo "FOYER_TOKEN=$(node /var/www/life/server/index.js --make-token)" | sudo tee /etc/foyer.env
+#   sudo systemctl daemon-reload && sudo systemctl enable --now foyer
+[Unit]
+Description=Foyer (API SQLite + fichiers de l'app)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/life
+EnvironmentFile=/etc/foyer.env
+Environment=PORT=3311
+Environment=HOST=127.0.0.1
+Environment=FOYER_DB=/var/lib/foyer/foyer.db
+Environment=FOYER_STATIC=0
+ExecStart=/usr/bin/node /var/www/life/server/index.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/foyer
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

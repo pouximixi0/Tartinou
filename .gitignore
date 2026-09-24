@@ -1,0 +1,11 @@
+# Base de données locale (données personnelles)
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Outils et dépendances
+node_modules/
+graphify-out/
+.DS_Store
+Thumbs.db

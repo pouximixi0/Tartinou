@@ -1,0 +1,14 @@
+{
+  "name": "tartinou",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Dépenses, menus de la semaine et stock alimentaire. PWA + API SQLite sans dépendance.",
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js",
+    "token": "node server/index.js --make-token",
+    "icons": "node scripts/make-icons.cjs"
+  }
+}
