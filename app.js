@@ -40,7 +40,7 @@ function applyTheme(theme) {
   if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
   else delete root.dataset.theme;
   const dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#0F172A' : '#14213D');
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#121211' : '#F4F3EF');
 }
 
 function render() {

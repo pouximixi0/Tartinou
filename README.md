@@ -15,7 +15,7 @@ npm start
 
 Le serveur sert aussi les fichiers de l'app. Pour tester le rendu mobile, utilise l'émulation d'appareil du navigateur (380 px de large). La caméra exige HTTPS ou `localhost`.
 
-Régénérer les icônes après un changement de palette : `npm run icons`.
+Icônes : `icons/icon-1024.png` est le logo source (fond marine) ; les tailles 512, 192 et 180 (Apple) en sont dérivées. `npm run icons` régénère les anciennes icônes géométriques si besoin.
 
 ## Déployer sur le serveur (life.pouximixi.fr)
 
