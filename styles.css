@@ -463,7 +463,10 @@ dialog.sheet-compact::before { content: ''; display: block; width: 36px; height:
     color: var(--ink); text-decoration: none; font-weight: 800; font-size: 1.15rem; letter-spacing: -0.03em;
   }
   .tabbar-brand img { width: 36px; height: 36px; border-radius: 9px; }
-  .tabbar-brand span::after { content: '.'; color: var(--budget); }
+  .tabbar-brand .brand-word { width: auto; height: 26px; border-radius: 0; margin-top: 2px; }
+  /* Le mot-symbole est marine sur fond clair ; en sombre on inverse la luminosité en gardant la teinte du point doré. */
+  :root[data-theme="dark"] .tabbar-brand .brand-word { filter: invert(1) hue-rotate(180deg) brightness(1.15); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tabbar-brand .brand-word { filter: invert(1) hue-rotate(180deg) brightness(1.15); } }
   .tab { flex-direction: row; justify-content: flex-start; gap: 12px; padding: 0 12px; min-height: 44px; border-radius: var(--r); font-size: 0.95rem; font-weight: 500; color: var(--ink-2); }
   .tab svg { width: 20px; height: 20px; }
   .tab[aria-current="page"] { background: var(--paper); color: var(--ink); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
