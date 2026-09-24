@@ -1,8 +1,8 @@
-// Service worker : cache-first pour les fichiers de l'app ; polices, lecteur
+// Service worker : cache-first pour les fichiers de l'app ; lecteur
 // ZXing et images Open Food Facts mis en cache à la première visite ; l'API
 // (/api/) et Open Food Facts ne passent jamais par le cache.
 // Incrémente VERSION à chaque déploiement.
-const VERSION = 'foyer-v2.0.3';
+const VERSION = 'foyer-v2.1.0';
 const RUNTIME = 'foyer-runtime';
 const ASSETS = [
   './',
@@ -41,7 +41,7 @@ const ASSETS = [
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
 ];
-const RUNTIME_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'images.openfoodfacts.org', 'static.openfoodfacts.org'];
+const RUNTIME_HOSTS = ['cdn.jsdelivr.net', 'images.openfoodfacts.org', 'static.openfoodfacts.org'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(VERSION).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));

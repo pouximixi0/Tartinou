@@ -67,6 +67,10 @@ Réglages → Sauvegarde → **Exporter mes données** télécharge `tartinou-AA
 
 Le max ajusté du jour vaut `(enveloppe − dépenses du cycle + dépenses du jour) / jours restants`. Si l'app a été installée (ou la première dépense saisie) en cours de cycle, seule la part de l'enveloppe qui couvre les jours suivis est prise en compte : `enveloppe × joursSuivis / joursDuCycle`. Sans cela, les jours non saisis seraient crédités comme des économies. Pour un cycle entièrement suivi, la formule est inchangée.
 
+## Design
+
+Une seule feuille de style, `styles.css`. Police système (aucune requête externe), fond papier et encre, un accent par domaine (budget ocre, cuisine vert), chiffres tabulaires, listes groupées à filets fins, feuilles basses pour la saisie. Thème clair et sombre suivent le système, ou se forcent dans les réglages. Pour vérifier un écran sur mobile sans téléphone : Chrome headless avec `Emulation.setDeviceMetricsOverride` (390 px, mobile), car la fenêtre headless refuse les largeurs sous 500 px.
+
 ## Structure
 
 - `index.html`, `styles.css`, `app.js` (routeur, pastille de synchronisation) ; `manifest.json`, `sw.js`.

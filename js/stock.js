@@ -83,7 +83,7 @@ export function dlcLabel(item, info) {
   const { status, jours } = info;
   if (status === 'none') return 'Sans date';
   const since = jours === -1 ? 'hier' : `depuis ${-jours} j`;
-  if (status === 'ddm') return `DDM dépassée ${since}`;
+  if (status === 'ddm') return jours === -1 ? 'DDM dépassée hier' : `DDM dépassée (${-jours} j)`;
   if (status === 'perime') return `Périmé ${since}`;
   const type = item.ddm ? 'DDM' : 'DLC';
   if (jours === 0) return `${type} aujourd'hui`;

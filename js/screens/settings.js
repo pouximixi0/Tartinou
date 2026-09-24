@@ -10,7 +10,6 @@ export function renderSettings() {
   const state = getState();
   const s = state.settings;
   const root = h('section', { class: 'screen screen-settings' });
-  root.append(h('h1', { class: 'lead' }, 'Réglages'));
 
   /* ---- Budget ---- */
   const summary = h('p', { class: 'summary' });

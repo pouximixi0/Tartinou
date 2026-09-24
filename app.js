@@ -24,6 +24,8 @@ const ROUTES = {
 
 const main = document.getElementById('screen');
 const tabbar = document.getElementById('tabbar');
+const topbar = document.getElementById('topbar');
+const screenTitle = document.getElementById('screen-title');
 const settingsLink = document.getElementById('settings-link');
 const syncDot = document.getElementById('sync-dot');
 let lastRoute = null;
@@ -49,7 +51,7 @@ function render() {
   if (sync.status === 'auth') {
     document.body.dataset.accent = 'budget';
     tabbar.hidden = true;
-    settingsLink.hidden = true;
+    topbar.hidden = true;
     main.replaceChildren(renderLogin());
     document.title = 'Connexion · Tartinou';
     return;
@@ -58,7 +60,7 @@ function render() {
   if (!state.settings.onboarded) {
     document.body.dataset.accent = 'budget';
     tabbar.hidden = true;
-    settingsLink.hidden = true;
+    topbar.hidden = true;
     main.replaceChildren(renderOnboarding());
     document.title = 'Bienvenue · Tartinou';
     return;
@@ -68,7 +70,8 @@ function render() {
   const route = ROUTES[key];
   const y = window.scrollY;
   tabbar.hidden = false;
-  settingsLink.hidden = false;
+  topbar.hidden = false;
+  screenTitle.textContent = route.title;
   document.body.dataset.accent = route.accent;
   document.title = `${route.title} · Tartinou`;
   main.replaceChildren(route.render());
