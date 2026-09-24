@@ -17,7 +17,7 @@ export function openWasteDialog(item, { qte = item.qte, title } = {}) {
     function drawTotal() {
       const p = input.value.trim() ? parseAmount(input.value) : null;
       const v = p != null && !Number.isNaN(p) ? valueOf(p, qte, item.unite) : null;
-      total.replaceChildren(v != null ? ['Gaspillage : ', h('strong', { class: 'num' }, money(v))] : 'Indique le prix pour chiffrer le gaspillage (facultatif).');
+      total.replaceChildren(...(v != null ? ['Gaspillage : ', h('strong', { class: 'num' }, money(v))] : ['Indique le prix pour chiffrer le gaspillage (facultatif).']));
     }
     input.addEventListener('input', drawTotal);
     drawTotal();

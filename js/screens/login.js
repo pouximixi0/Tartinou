@@ -76,9 +76,9 @@ function registerForm() {
   const foyerBox = h('div', { class: 'stack' });
   const serverHint = h('p', { class: 'muted small' }, 'Le premier compte du serveur crée son foyer librement. Ensuite, créer un nouveau foyer demande le code serveur.');
   function drawFoyer() {
-    foyerBox.replaceChildren(join
+    foyerBox.replaceChildren(...(join
       ? [field('rg-invit', 'Code d’invitation du foyer', invit), h('p', { class: 'muted small' }, 'Il est affiché dans Réglages → Compte et foyer de la personne qui t’invite.')]
-      : [field('rg-foyer', 'Nom du foyer', nomFoyer), field('rg-serveur', 'Code serveur (si demandé)', codeServeur), serverHint]);
+      : [field('rg-foyer', 'Nom du foyer', nomFoyer), field('rg-serveur', 'Code serveur (si demandé)', codeServeur), serverHint]));
   }
   api('GET', '/health').then((hlt) => {
     if (hlt.premierCompte) { join = false; joinSeg.querySelectorAll('input')[1].checked = true; drawFoyer(); serverHint.textContent = 'Premier compte de ce serveur : tu crées ton foyer, sans code.'; }
