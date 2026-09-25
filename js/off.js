@@ -8,10 +8,11 @@ import { guessCategorie, guessEmplacement } from './stock.js';
 
 /** Bases interrogées, par ordre de priorité quand un même code existe dans plusieurs. */
 export const BASES = [
-  { id: 'off', host: 'world.openfoodfacts.org', label: 'Open Food Facts', categorie: null },
-  { id: 'opf', host: 'world.openproductsfacts.org', label: 'Open Products Facts', categorie: 'Hygiène & entretien' },
-  { id: 'obf', host: 'world.openbeautyfacts.org', label: 'Open Beauty Facts', categorie: 'Hygiène & entretien' },
-  { id: 'opff', host: 'world.openpetfoodfacts.org', label: 'Open Pet Food Facts', categorie: 'Autre' },
+  // `host` : fiche par code-barres (monde entier) ; `search` : recherche par nom sur le site français (produits vendus en France, noms en français).
+  { id: 'off', host: 'world.openfoodfacts.org', search: 'fr.openfoodfacts.org', label: 'Open Food Facts', categorie: null, taille: 8 },
+  { id: 'opf', host: 'world.openproductsfacts.org', search: 'fr.openproductsfacts.org', label: 'Open Products Facts', categorie: 'Hygiène & entretien', taille: 4 },
+  { id: 'obf', host: 'world.openbeautyfacts.org', search: 'fr.openbeautyfacts.org', label: 'Open Beauty Facts', categorie: 'Hygiène & entretien', taille: 4 },
+  { id: 'opff', host: 'world.openpetfoodfacts.org', search: 'fr.openpetfoodfacts.org', label: 'Open Pet Food Facts', categorie: 'Autre', taille: 4 },
 ];
 export const baseLabel = (id) => (BASES.find((b) => b.id === id) || BASES[0]).label;
 const FIELDS = ['code', 'product_name', 'product_name_fr', 'generic_name_fr', 'brands', 'quantity', 'categories', 'categories_tags', 'image_front_small_url', 'image_front_url',
@@ -69,24 +70,36 @@ export async function searchProducts(query, onUpdate = null) {
   const ctrl = searchCtrl;
   const timer = setTimeout(() => ctrl.abort(), 9000);
   searchProducts.limited = false;
+  searchProducts.failed = [];
   try {
     // Les quatre bases en parallèle ; les virgules de `fields` restent telles quelles (le serveur ne décode pas %2C).
     const one = async (base) => {
-      const url = `https://${base.host}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=6&lc=fr&fields=code,product_name,product_name_fr,brands,quantity,image_front_small_url,nutriscore_grade`;
-      // Chaque base a 6 s ; une base lente n'empêche pas les autres de s'afficher.
-      const signal = typeof AbortSignal.any === 'function' ? AbortSignal.any([ctrl.signal, AbortSignal.timeout(6000)]) : ctrl.signal;
-      try {
-        const res = await fetch(url, { headers: { Accept: 'application/json' }, signal });
-        if (res.status === 429) searchProducts.limited = true;
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data.products || [])
-          .map((p) => ({ code: String(p.code || ''), nom: (p.product_name_fr || p.product_name || '').trim(), marque: (p.brands || '').split(',')[0].trim(), quantite: (p.quantity || '').trim(), image: p.image_front_small_url || null, nutriscore: grade(p.nutriscore_grade), base: base.id }))
-          .filter((p) => p.code && p.nom);
-      } catch (e) { if (ctrl.signal.aborted) throw e; return []; }
+      // Triés par popularité (nombre de scans) : « prince » donne d'abord les biscuits que tout le monde connaît.
+      const url = `https://${base.search}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=${base.taille}&sort_by=unique_scans_n&lc=fr&fields=code,product_name,product_name_fr,brands,quantity,image_front_small_url,nutriscore_grade,unique_scans_n`;
+      // Chaque base a 10 s ; une base lente n'empêche pas les autres de s'afficher.
+      const signal = typeof AbortSignal.any === 'function' ? AbortSignal.any([ctrl.signal, AbortSignal.timeout(10000)]) : ctrl.signal;
+      // Trois tentatives : ces serveurs bénévoles renvoient parfois une erreur passagère.
+      for (let essai = 0; essai < 3; essai++) {
+        try {
+          const res = await fetch(url, { headers: { Accept: 'application/json' }, signal });
+          if (res.status === 429) { searchProducts.limited = true; searchProducts.failed.push(base.label); return []; }
+          if (!res.ok) { if (essai < 2) { await new Promise((r) => setTimeout(r, 700)); continue; } searchProducts.failed.push(base.label); return []; }
+          const data = await res.json();
+          return (data.products || [])
+          .map((p) => ({ code: String(p.code || ''), nom: (p.product_name_fr || p.product_name || '').trim(), marque: (p.brands || '').split(',')[0].trim(), quantite: (p.quantity || '').trim(), image: p.image_front_small_url || null, nutriscore: grade(p.nutriscore_grade), base: base.id, scans: Number(p.unique_scans_n) || 0 }))
+            .filter((p) => p.code && p.nom);
+        } catch (e) {
+          if (ctrl.signal.aborted) throw e;
+          if (essai < 2 && !signal.aborted) { await new Promise((r) => setTimeout(r, 700)); continue; }
+          searchProducts.failed.push(base.label);
+          return [];
+        }
+      }
+      return [];
     };
     const byBase = new Map();
-    const merged = () => { const seen = new Set(); return BASES.flatMap((b) => byBase.get(b.id) || []).filter((p) => !seen.has(p.code) && seen.add(p.code)).slice(0, 12); };
+    // Fusion triée par popularité toutes bases confondues (tri stable : à égalité, l'alimentaire d'abord).
+    const merged = () => { const seen = new Set(); return BASES.flatMap((b) => byBase.get(b.id) || []).filter((p) => !seen.has(p.code) && seen.add(p.code)).sort((a, b) => b.scans - a.scans).slice(0, 12); };
     let pending = BASES.length;
     await Promise.all(BASES.map(async (base) => {
       const list = await one(base);

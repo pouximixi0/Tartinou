@@ -94,6 +94,7 @@ export function openProductSheet({ code = null, product = null, item = null, def
         ] : [];
         if (pending > 0) rows.push(h('li', { class: 'off-suggest-head muted small off-suggest-loading' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), found.length ? `Encore ${pending} base${pending > 1 ? 's' : ''} en cours…` : `Recherche de « ${q} » dans Open Food Facts, Open Products Facts, Open Beauty Facts…`));
         else if (!found.length) rows.push(h('li', { class: 'off-suggest-head muted small' }, searchProducts.limited ? 'Trop de recherches d’un coup : réessaie dans une minute.' : `Aucun produit « ${q} » dans les bases Open Facts. Tu peux continuer à la main.`));
+        else if ((searchProducts.failed || []).length) rows.push(h('li', { class: 'off-suggest-head muted small' }, `Résultats partiels : ${searchProducts.failed.join(', ')} n’a pas répondu${searchProducts.limited ? ' (trop de recherches en une minute)' : ''}. Réessaie dans un instant.`));
         suggestBox.replaceChildren(...rows);
         suggestBox.hidden = false;
       };
