@@ -9,11 +9,17 @@ export async function fetchOpenPrices(code) {
   const key = String(code || '').trim();
   if (!key) return [];
   if (cache.has(key)) return cache.get(key);
-  const res = await fetch(`${API}?product_code=${encodeURIComponent(key)}&size=60&order_by=-date`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(9000) });
-  if (!res.ok) throw new Error(`Open Prices répond ${res.status}`);
-  const data = await res.json();
+  // L'API ne filtre pas par distance : on ramène jusqu'à 300 relevés récents (3 pages) puis on trie ici.
+  const items = [];
+  for (let page = 1; page <= 3; page++) {
+    const res = await fetch(`${API}?product_code=${encodeURIComponent(key)}&size=100&page=${page}&order_by=-date`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(9000) });
+    if (!res.ok) { if (page === 1) throw new Error(`Open Prices répond ${res.status}`); break; }
+    const data = await res.json();
+    items.push(...(data.items || []));
+    if (!data.pages || page >= data.pages) break;
+  }
   const byLoc = new Map();
-  for (const p of data.items || []) {
+  for (const p of items) {
     if (p.currency !== 'EUR' || !p.location || p.price == null) continue;
     if (byLoc.has(p.location_id)) continue; // trié par date décroissante : le premier est le plus récent
     const l = p.location;
@@ -36,6 +42,10 @@ export function distanceKm(a, b) {
   return 6371 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
+/** Position déjà autorisée sur cet appareil ? (sans rien demander) */
+export async function positionGranted() {
+  try { return navigator.permissions ? (await navigator.permissions.query({ name: 'geolocation' })).state === 'granted' : false; } catch { return false; }
+}
 export function savedPosition() {
   try { const p = JSON.parse(localStorage.getItem(POS_KEY)); return p && typeof p.lat === 'number' && Date.now() - p.at < 30 * 86400000 ? p : null; } catch { return null; }
 }

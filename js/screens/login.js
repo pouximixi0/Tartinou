@@ -115,15 +115,18 @@ function registerForm(switchTo) {
     [[true, 'Rejoindre un foyer'], [false, 'Créer un foyer']].map(([v, label]) =>
       h('label', { class: 'seg' }, h('input', { type: 'radio', name: 'rg-join', checked: join === v, onchange: () => { join = v; drawFoyer(); } }), h('span', null, label))));
   const foyerBox = h('div', { class: 'stack' });
-  const serverHint = h('p', { class: 'muted small' }, 'Le premier compte du serveur crée son foyer librement. Ensuite, créer un nouveau foyer demande le code serveur.');
+  // Le code serveur n'est demandé que si le serveur l'exige (inscriptions sur invitation, après le premier compte).
+  let needServerCode = true;
+  const serverHint = h('p', { class: 'muted small' }, 'Créer un nouveau foyer demande le code donné par la personne qui héberge Tartinou.');
   function drawFoyer() {
     foyerBox.replaceChildren(...(join
       ? [field('rg-invit', 'Code d’invitation', invit, 'Affiché dans Réglages → Compte et foyer de la personne qui t’invite.')]
-      : [field('rg-foyer', 'Nom du foyer', nomFoyer), field('rg-serveur', 'Code serveur (si demandé)', codeServeur), serverHint]));
+      : [field('rg-foyer', 'Nom du foyer', nomFoyer), needServerCode ? field('rg-serveur', 'Code serveur', codeServeur) : null, needServerCode ? serverHint : null]));
   }
   api('GET', '/health').then((hlt) => {
-    if (hlt.premierCompte && !inviteFromHash()) { join = false; joinSeg.querySelectorAll('input')[1].checked = true; drawFoyer(); serverHint.textContent = 'Premier compte de ce serveur : tu crées ton foyer, sans code.'; }
-    else if (hlt.inscription === 'ouverte') serverHint.textContent = 'Les inscriptions sont ouvertes : aucun code serveur nécessaire.';
+    needServerCode = !hlt.premierCompte && hlt.inscription !== 'ouverte';
+    if (hlt.premierCompte && !inviteFromHash()) { join = false; joinSeg.querySelectorAll('input')[1].checked = true; }
+    drawFoyer();
   }).catch(() => {});
   drawFoyer();
 

@@ -13,7 +13,7 @@ import { scanOnce } from '../scanner.js';
 import { openPublishSheet } from './publish-sheet.js';
 import { recallsFor } from '../recalls.js';
 import { recallBlock } from './recall-dialog.js';
-import { fetchOpenPrices, sortPrices, savedPosition, askPosition, fmtKm } from '../prices.js';
+import { fetchOpenPrices, sortPrices, savedPosition, askPosition, positionGranted, fmtKm } from '../prices.js';
 import { isOn } from '../modules.js';
 
 const DLC_SHORTCUTS = [['Sans', null], ['+3 j', 3], ['+1 sem', 7], ['+1 mois', 30], ['+3 mois', 90], ['+6 mois', 180], ['+1 an', 365]];
@@ -190,15 +190,20 @@ export function openProductSheet({ code = null, product = null, item = null, def
     pricesBox.replaceChildren(h('p', { class: 'muted small' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), ' Prix relevés en magasin (Open Prices)…'));
     try { openPrices = await fetchOpenPrices(d.code); }
     catch { if (!closed) pricesBox.hidden = true; return; }
+    if (closed || pricesCode !== d.code) return;
+    // Position déjà autorisée sur l'appareil : on la rafraîchit sans rien demander, pour trier par distance d'office.
+    if (openPrices.length && (!savedPosition() || Date.now() - savedPosition().at > 86400000) && await positionGranted()) { try { await askPosition(); } catch {} }
     if (!closed && pricesCode === d.code) drawOpenPrices();
   }
   function drawOpenPrices() {
     if (!openPrices || !openPrices.length) { pricesBox.replaceChildren(h('p', { class: 'muted small' }, 'Aucun prix relevé pour ce produit sur Open Prices.')); return; }
     const pos = savedPosition();
     const sorted = sortPrices(openPrices, pos).slice(0, 6);
-    const near = h('button', { type: 'button', class: 'link small', onclick: async () => { try { await askPosition(); drawOpenPrices(); } catch (e) { toast(e.message); } } }, icon('pin'), pos ? 'Actualiser ma position' : 'Trier par distance');
+    const locate = async () => { try { await askPosition(); drawOpenPrices(); } catch (e) { toast(e.message); } };
     pricesBox.replaceChildren(
-      h('p', { class: 'muted small open-prices-head' }, `${openPrices.length} prix relevé${openPrices.length > 1 ? 's' : ''} en magasin (Open Prices)${pos ? ', du plus proche au plus loin' : ', les plus récents'} · `, near),
+      h('p', { class: 'muted small open-prices-head' }, `${openPrices.length} prix relevé${openPrices.length > 1 ? 's' : ''} en magasin (Open Prices)${pos ? ', du plus proche au plus loin' : ', les plus récents'}`,
+        pos ? [' · ', h('button', { type: 'button', class: 'link small', onclick: locate }, icon('pin'), 'Actualiser ma position')] : null),
+      pos ? null : h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: locate }, icon('pin'), 'Trier par distance (près de moi)'),
       h('div', { class: 'chips chips-sm' }, sorted.map((p) => h('button', { type: 'button', class: 'chip chip-sm chip-price', title: `Relevé le ${fmtDate(p.date, { day: 'numeric', month: 'long', year: 'numeric' })}`, onclick: () => {
         d.prix = p.prix; prixInput.value = String(p.prix).replace('.', ',');
         if (isOn('prixHistorique')) { d.magasin = p.magasin; magasinInput.value = p.magasin; }
