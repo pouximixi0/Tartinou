@@ -12,6 +12,8 @@ import { openWasteDialog } from '../components/waste-dialog.js';
 import { openDialog } from '../components/dialog.js';
 import { stepper } from '../components/stepper.js';
 import { isOn } from '../modules.js';
+import { loadRecalls, recalls, recalledItems, recallsFor } from '../recalls.js';
+import { openRecallsDialog } from '../components/recall-dialog.js';
 
 // Filtres conservés entre deux rendus.
 const ui = { q: '', emplacement: 'tous', tri: 'dlc' };
@@ -39,6 +41,18 @@ export function renderStock() {
       h('button', { type: 'button', class: 'btn btn-secondary btn-tall', onclick: () => openProductSheet({}) }, icon('plus'), 'À la main'),
       items.length && isOn('rangement') ? h('button', { type: 'button', class: 'btn btn-secondary btn-tall', onclick: openInventorySheet }, icon('check'), 'Rangement') : null),
   );
+
+  /* ---- Rappels de produits (RappelConso) ---- */
+  if (isOn('rappels') && items.some((it) => it.code)) {
+    const shown = recalls().length;
+    loadRecalls().then((l) => { if (l.length !== shown && root.isConnected) update(() => {}); }).catch(() => {});
+    const touched = recalledItems(items);
+    if (touched.length) {
+      const list = recalls().filter((r) => touched.some((it) => Number(String(it.code).replace(/\D/g, '')) === Number(r.gtin)));
+      root.append(h('button', { type: 'button', class: 'stock-alert stock-alert-btn', onclick: () => openRecallsDialog(list, touched) },
+        icon('alert'), h('span', null, `Rappel officiel : ${touched.map((it) => it.nom).slice(0, 3).join(', ')}${touched.length > 3 ? ` et ${touched.length - 3} autre${touched.length > 4 ? 's' : ''}` : ''}. Ne consomme pas avant d’avoir lu la fiche.`), icon('chevron')));
+    }
+  }
 
   if (!items.length) {
     root.append(h('div', { class: 'empty' },
@@ -124,7 +138,7 @@ function itemRow(item, st) {
       h('span', { class: 'stock-text' },
         h('span', { class: 'stock-name' }, item.nom),
         meta ? h('span', { class: 'stock-meta muted small' }, meta) : null,
-        h('span', { class: 'badges' }, nutri, h('span', { class: `dlc-badge dlc-${info.status}` }, dlcLabel(item, info)), conflicts.length ? h('span', { class: 'tag-allergene', title: `Contient : ${conflicts.join(', ')}` }, icon('alert'), conflicts[0]) : null))),
+        h('span', { class: 'badges' }, isOn('rappels') && recallsFor(item.code).length ? h('span', { class: 'tag-allergene tag-rappel', title: 'Produit rappelé (RappelConso)' }, icon('alert'), 'Rappelé') : null, nutri, h('span', { class: `dlc-badge dlc-${info.status}` }, dlcLabel(item, info)), conflicts.length ? h('span', { class: 'tag-allergene', title: `Contient : ${conflicts.join(', ')}` }, icon('alert'), conflicts[0]) : null))),
     step,
   );
   return li;

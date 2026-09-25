@@ -394,6 +394,17 @@ dialog.sheet-compact::before { content: ''; display: block; width: 36px; height:
 .stock-alert .icon:last-child { color: var(--muted); }
 .stock-alert > span:not(.icon) { flex: 1; }
 .stock-alert.is-soft { background: var(--budget-soft); }
+.stock-alert-btn { width: 100%; border: 0; text-align: left; font: inherit; cursor: pointer; }
+.tag-rappel { background: var(--danger); color: #fff; }
+.recall-box { border-left: 3px solid var(--danger); background: var(--danger-soft); border-radius: var(--r); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.recall-title { display: flex; align-items: center; gap: 8px; }
+.recall-title .icon { color: var(--danger); width: 18px; height: 18px; flex: 0 0 auto; }
+.recall-steps { padding-left: 18px; list-style: disc; }
+.recall-box p { margin: 0; }
+.open-prices { display: flex; flex-direction: column; gap: 8px; }
+.open-prices-head .link { display: inline-flex; align-items: center; gap: 4px; }
+.open-prices-head .link .icon { width: 14px; height: 14px; }
+.chip-price { gap: 4px; }
 .stock-alert.is-soft .icon:first-child { color: var(--budget); }
 
 /* Fiche produit */

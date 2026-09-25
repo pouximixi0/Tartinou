@@ -122,6 +122,8 @@ Sans framework ni bundler côté client, sans dépendance npm côté serveur. No
 - **Mode rangement** : inventaire guidé produit par produit.
 - **Anti-gaspi** : « Jeté ? » avec raison, journal, statistiques sur six mois, **euros gaspillés**.
 - **Étiquettes QR** à imprimer pour les bocaux et le congélateur.
+- **Rappels de produits** : le serveur confronte les codes-barres du stock à RappelConso (site officiel des rappels) toutes les douze heures ; bandeau rouge dans le stock et sur Aujourd'hui, fiche du rappel (motif, risques, conduite à tenir, lien officiel), notification aux membres.
+- **Prix relevés en magasin** (Open Prices) : pour un produit scanné, les derniers prix vus par d'autres, magasin par magasin, triés par distance quand on autorise la localisation ; un tap remplit le prix et le magasin.
 
 <br clear="all">
 
@@ -279,6 +281,7 @@ Toutes les routes sauf `health`, `auth/register`, `auth/login` et `public/*` exi
 | `GET /api/events?token=…` | Flux SSE : `state` (collections écrites), `membres`, `community`. |
 | `GET /api/community` | Le fil commun (publications, réactions, commentaires). |
 | `GET /api/community/membres` | Tous les comptes du serveur, avec foyer et présence en ligne. |
+| `GET /api/rappels` | Rappels RappelConso qui concernent les codes-barres du stock (vérification au plus toutes les 12 h). |
 | `POST /api/community` | Publie un message, une recette, un menu ou une liste. |
 | `POST /api/community/:id/react` · `comment` | Réaction (bascule) et commentaire. |
 | `DELETE /api/community/:id` · `/comment/:cid` | Suppression par l'auteur. |
@@ -325,7 +328,7 @@ Une seule feuille de style. Police système, fond papier et encre, un accent par
 
 - **Réglages → Sauvegarde → Exporter** télécharge `tartinou-AAAA-MM-JJ.json` ; **Importer** remplace tout (sur le serveur aussi) après confirmation. Le champ `version` permet à `migrate()` de convertir les anciens formats.
 - Côté serveur, sauvegarde `/var/lib/foyer/` (avec les fichiers `-wal`).
-- Services externes : Open Food Facts, Open Products Facts, Open Beauty Facts et Open Pet Food Facts (seul le code-barres ou le nom tapé est envoyé), jsDelivr pour ZXing et le générateur de QR quand le navigateur en a besoin, images produit sur `images.openfoodfacts.org`. Rien d'autre ne sort du serveur.
+- Services externes : Open Food Facts, Open Products Facts, Open Beauty Facts et Open Pet Food Facts (seul le code-barres ou le nom tapé est envoyé), Open Prices (code-barres), RappelConso depuis le serveur (codes-barres du stock), jsDelivr pour ZXing et le générateur de QR quand le navigateur en a besoin, images produit sur `images.openfoodfacts.org`. Rien d'autre ne sort du serveur.
 
 ### Règle du report sur un cycle partiellement suivi
 

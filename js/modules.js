@@ -43,6 +43,8 @@ export const MODULE_GROUPS = [
     ['antiGaspi', 'Anti-gaspi', 'Journal, statistiques, euros gaspillés.'],
     ['rangement', 'Mode rangement', 'Inventaire guidé.'],
     ['etiquettesQR', 'Étiquettes QR', ''],
+    ['rappels', 'Rappels de produits', 'Alerte quand un produit du stock fait l’objet d’un rappel officiel (RappelConso).'],
+    ['prixOpen', 'Prix relevés en magasin', 'Open Prices : prix vus par d’autres pour ce produit, triés par distance.'],
   ] },
   { titre: 'Général', items: [
     ['partage', 'Boutons de partage', 'Liste, menu, recettes, invitation.'],

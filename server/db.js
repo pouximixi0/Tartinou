@@ -63,6 +63,11 @@ CREATE TABLE IF NOT EXISTS a_racheter (
   id TEXT PRIMARY KEY, nom TEXT NOT NULL, code TEXT, qte REAL NOT NULL DEFAULT 1, unite TEXT NOT NULL DEFAULT 'piece',
   auto INTEGER NOT NULL DEFAULT 0, ajoute_le TEXT, position INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS rappels (
+  gtin TEXT NOT NULL, numero TEXT NOT NULL, data TEXT NOT NULL, found_at INTEGER NOT NULL, notified INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (gtin, numero)
+);
+CREATE TABLE IF NOT EXISTS rappels_check (id INTEGER PRIMARY KEY CHECK (id = 1), checked_at INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS price_history (
   id TEXT PRIMARY KEY, code TEXT, nom TEXT NOT NULL, magasin TEXT, prix REAL NOT NULL, unite TEXT, date TEXT NOT NULL
 );
@@ -89,6 +94,7 @@ CREATE TABLE IF NOT EXISTS push_config (id INTEGER PRIMARY KEY CHECK (id = 1), p
 
 // Colonnes ajoutées après la v2.0 : on les crée si elles manquent (SQLite n'a pas de ADD COLUMN IF NOT EXISTS).
 const COLUMNS = [
+  ['rappels_check', 'codes_hash', "TEXT NOT NULL DEFAULT ''"],
   ['settings', 'allergenes', "TEXT NOT NULL DEFAULT '[]'"],
   ['settings', 'objectifs', "TEXT NOT NULL DEFAULT '{}'"],
   ['settings', 'notif_actives', 'INTEGER NOT NULL DEFAULT 1'],
@@ -132,6 +138,7 @@ export function openDb(file) {
   db.exec('INSERT OR IGNORE INTO settings (id) VALUES (1)');
   db.exec('INSERT OR IGNORE INTO prompt_form (id) VALUES (1)');
   db.exec('INSERT OR IGNORE INTO push_config (id) VALUES (1)');
+  db.exec('INSERT OR IGNORE INTO rappels_check (id) VALUES (1)');
   return db;
 }
 
@@ -329,6 +336,22 @@ export const removeMember = (db, id) => db.prepare('DELETE FROM members WHERE id
 /* ---------- Notifications push ---------- */
 export const pushConfig = (db) => db.prepare('SELECT * FROM push_config WHERE id = 1').get();
 export const savePushConfig = (db, pub, priv, subject) => db.prepare('UPDATE push_config SET public_key = ?, private_key = ?, subject = ? WHERE id = 1').run(pub, priv, subject);
+/* ---------- Rappels de produits (RappelConso) ---------- */
+export const stockCodes = (db) => db.prepare("SELECT DISTINCT code FROM stock_items WHERE code IS NOT NULL AND code != ''").all().map((r) => r.code);
+export const recallsCheckedAt = (db) => db.prepare('SELECT checked_at FROM rappels_check WHERE id = 1').get()?.checked_at || 0;
+/** Empreinte des codes vérifiés la dernière fois : un stock qui change se revérifie sans attendre. */
+export const recallsCheckedCodes = (db) => db.prepare('SELECT codes_hash FROM rappels_check WHERE id = 1').get()?.codes_hash || '';
+export const setRecallsChecked = (db, hash = '') => db.prepare('UPDATE rappels_check SET checked_at = ?, codes_hash = ? WHERE id = 1').run(Date.now(), hash);
+/** Enregistre les rappels trouvés ; retourne ceux qui sont nouveaux pour ce foyer. */
+export function saveRecalls(db, list) {
+  const ins = db.prepare('INSERT OR IGNORE INTO rappels (gtin, numero, data, found_at) VALUES (?, ?, ?, ?)');
+  const fresh = [];
+  for (const r of list) { if (ins.run(r.gtin, r.numero, JSON.stringify(r), Date.now()).changes) fresh.push(r); }
+  return fresh;
+}
+export const listRecalls = (db) => db.prepare('SELECT data, notified FROM rappels ORDER BY found_at DESC').all().map((r) => ({ ...JSON.parse(r.data), notified: !!r.notified }));
+export const markRecallsNotified = (db) => db.prepare('UPDATE rappels SET notified = 1').run();
+
 export const listSubscriptions = (db) => db.prepare('SELECT * FROM push_subscriptions ORDER BY rowid').all();
 export function upsertSubscription(db, { id, endpoint, p256dh, auth, label, member }) {
   db.prepare('INSERT INTO push_subscriptions (id, endpoint, p256dh, auth, label, member, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth, label = excluded.label, member = excluded.member')

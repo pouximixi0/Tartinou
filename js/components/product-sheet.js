@@ -11,6 +11,9 @@ import { openWasteDialog } from './waste-dialog.js';
 import { stepper } from './stepper.js';
 import { scanOnce } from '../scanner.js';
 import { openPublishSheet } from './publish-sheet.js';
+import { recallsFor } from '../recalls.js';
+import { recallBlock } from './recall-dialog.js';
+import { fetchOpenPrices, sortPrices, savedPosition, askPosition, fmtKm } from '../prices.js';
 import { isOn } from '../modules.js';
 
 const DLC_SHORTCUTS = [['Sans', null], ['+3 j', 3], ['+1 sem', 7], ['+1 mois', 30], ['+3 mois', 90], ['+6 mois', 180], ['+1 an', 365]];
@@ -177,6 +180,31 @@ export function openProductSheet({ code = null, product = null, item = null, def
   drawAllergens();
   const prixLabelEl = h('label', { for: 'pr-prix' }, prixLabel(d.unite));
   const prixHint = h('p', { class: 'muted small' });
+  /* ---- Prix relevés par d'autres (Open Prices), triés par distance ---- */
+  const pricesBox = h('div', { class: 'open-prices', hidden: true });
+  let openPrices = null, pricesCode = null;
+  async function loadOpenPrices() {
+    if (!d.code || !isOn('prixOpen') || pricesCode === d.code) return;
+    pricesCode = d.code;
+    pricesBox.hidden = false;
+    pricesBox.replaceChildren(h('p', { class: 'muted small' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), ' Prix relevés en magasin (Open Prices)…'));
+    try { openPrices = await fetchOpenPrices(d.code); }
+    catch { if (!closed) pricesBox.hidden = true; return; }
+    if (!closed && pricesCode === d.code) drawOpenPrices();
+  }
+  function drawOpenPrices() {
+    if (!openPrices || !openPrices.length) { pricesBox.replaceChildren(h('p', { class: 'muted small' }, 'Aucun prix relevé pour ce produit sur Open Prices.')); return; }
+    const pos = savedPosition();
+    const sorted = sortPrices(openPrices, pos).slice(0, 6);
+    const near = h('button', { type: 'button', class: 'link small', onclick: async () => { try { await askPosition(); drawOpenPrices(); } catch (e) { toast(e.message); } } }, icon('pin'), pos ? 'Actualiser ma position' : 'Trier par distance');
+    pricesBox.replaceChildren(
+      h('p', { class: 'muted small open-prices-head' }, `${openPrices.length} prix relevé${openPrices.length > 1 ? 's' : ''} en magasin (Open Prices)${pos ? ', du plus proche au plus loin' : ', les plus récents'} · `, near),
+      h('div', { class: 'chips chips-sm' }, sorted.map((p) => h('button', { type: 'button', class: 'chip chip-sm chip-price', title: `Relevé le ${fmtDate(p.date, { day: 'numeric', month: 'long', year: 'numeric' })}`, onclick: () => {
+        d.prix = p.prix; prixInput.value = String(p.prix).replace('.', ',');
+        if (isOn('prixHistorique')) { d.magasin = p.magasin; magasinInput.value = p.magasin; }
+        drawPrixHint(); toast(`${money(p.prix)} chez ${p.magasin}`);
+      } }, h('strong', { class: 'num' }, money(p.prix)), ` ${p.magasin}${p.ville ? `, ${p.ville}` : ''}`, h('span', { class: 'muted' }, p.km != null ? ` · ${fmtKm(p.km)}` : ` · ${fmtDate(p.date, { month: 'short', year: '2-digit' })}`)))));
+  }
   function drawPrixHint() {
     const p = prixInput.value.trim() ? parseAmount(prixInput.value) : null;
     const v = p != null && !Number.isNaN(p) ? valueOf(p, qty.get(), uniteSelect.value) : null;
@@ -231,6 +259,7 @@ export function openProductSheet({ code = null, product = null, item = null, def
   }
   async function doLookup(force = false) {
     if (!d.code) return;
+    loadOpenPrices();
     lookupLine.hidden = false;
     lookupLine.replaceChildren(h('span', { class: 'spinner', 'aria-hidden': 'true' }), ' Recherche du code-barres dans les bases Open Facts (alimentation, ménager, hygiène, animaux)…');
     const res = await lookupProduct(d.code, { force });
@@ -249,6 +278,7 @@ export function openProductSheet({ code = null, product = null, item = null, def
     }
   }
   if (d.code && !currentProduct) doLookup();
+  else if (d.code) loadOpenPrices();
 
   async function attachCode() {
     const c = await scanOnce('Associer un code-barres');
@@ -345,6 +375,7 @@ export function openProductSheet({ code = null, product = null, item = null, def
         editing && isOn('foyer') ? h('button', { type: 'button', class: 'btn-icon', 'aria-label': 'Publier ce produit dans le fil', title: 'Publier dans le fil', onclick: publish }, icon('share')) : null,
         h('button', { type: 'button', class: 'btn-icon', 'aria-label': 'Fermer', onclick: () => dlg.close() }, icon('x')))),
     h('div', { class: 'sheet-body' },
+      ...(editing && isOn('rappels') ? recallsFor(d.code).map((r) => recallBlock(r)) : []),
       h('div', { class: 'product-head' }, thumb,
         h('div', { class: 'product-fields' },
           h('div', { class: 'field' }, h('label', { for: 'pr-nom' }, 'Produit'), nomInput, suggestBox),
@@ -359,6 +390,7 @@ export function openProductSheet({ code = null, product = null, item = null, def
       h('div', { class: 'field-row' }, h('div', { class: 'field' }, prixLabelEl, prixInput), isOn('prixHistorique') ? h('div', { class: 'field' }, h('label', { for: 'pr-magasin' }, 'Magasin'), magasinInput, storesList) : null),
       prixHint,
       insightLine,
+      pricesBox,
       h('div', { class: 'field' }, h('span', { class: 'label' }, 'Emplacement'), empChips),
       h('div', { class: 'field' }, h('label', { for: 'pr-dlc' }, 'Date limite'), h('div', { class: 'qty-row' }, dateInput, typeSeg), dlcChips, typeHint),
       editing ? h('div', { class: 'row-actions' },

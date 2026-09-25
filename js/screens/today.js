@@ -1,7 +1,7 @@
 // Écran Aujourd'hui : la jauge du jour, les mini-jauges semaine/mois,
 // le bouton d'ajout, les dépenses du jour et la série.
 import { h, icon, money, todayISO, dateLong, dateShort, capitalize } from '../utils.js';
-import { getState } from '../store.js';
+import { getState, update } from '../store.js';
 import { computeBudget } from '../budget.js';
 import { gauge } from '../components/gauge.js';
 import { expenseList } from '../components/expense-row.js';
@@ -10,6 +10,7 @@ import { stockSummary } from '../stock.js';
 import { objectifsStatus } from '../finance.js';
 import { wallZone } from '../components/wall.js';
 import { isOn } from '../modules.js';
+import { loadRecalls, recalls, recalledItems } from '../recalls.js';
 
 export function renderToday() {
   const state = getState();
@@ -57,6 +58,12 @@ export function renderToday() {
     if (stock.urgents) bits.push(`${stock.urgents} à consommer vite`);
     if (stock.ddm) bits.push(`${stock.ddm} DDM dépassée${stock.ddm > 1 ? 's' : ''} à vérifier`);
     root.append(h('a', { class: `stock-alert${stock.perimes ? '' : ' is-soft'}`, href: '#stock' }, icon('alert'), h('span', null, `Stock : ${bits.join(' · ')}`), icon('chevron')));
+  }
+  if (isOn('rappels') && isOn('stock') && state.stock.items.some((it) => it.code)) {
+    const shown = recalls().length;
+    loadRecalls().then((l) => { if (l.length !== shown && root.isConnected) update(() => {}); }).catch(() => {});
+    const touched = recalledItems(state.stock.items);
+    if (touched.length) root.append(h('a', { class: 'stock-alert', href: '#stock' }, icon('alert'), h('span', null, `Rappel officiel de produit : ${touched.map((it) => it.nom).slice(0, 2).join(', ')}${touched.length > 2 ? '…' : ''}`), icon('chevron')));
   }
   const objs = objectifsStatus(state, state.expenses.filter((e) => e.date >= b.cycle.start && e.date < b.cycle.end)).filter((o) => o.statut !== 'ok');
   if (objs.length && isOn('alerteObjectifs') && isOn('objectifs')) {

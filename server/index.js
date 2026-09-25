@@ -13,7 +13,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { openDb, readState, writeCollections, resetAll, upsertSubscription, removeSubscription, listSubscriptions, postsSnapshot, publicRecipe } from './db.js';
+import { openDb, readState, writeCollections, resetAll, upsertSubscription, removeSubscription, listSubscriptions, postsSnapshot, publicRecipe, stockCodes, recallsCheckedAt, recallsCheckedCodes, setRecallsChecked, saveRecalls, listRecalls, markRecallsNotified } from './db.js';
+import { fetchRecalls } from './recalls.js';
 import * as A from './auth.js';
 import { generateVapidKeys } from './webpush.js';
 import { notifyFoyer, broadcast } from './notify.js';
@@ -304,6 +305,15 @@ async function handleApi(req, res, url) {
     return fail(res, 404, 'Route inconnue');
   }
 
+  /* ---- Rappels de produits : codes du stock confrontés à RappelConso ---- */
+  if (route === 'GET /api/rappels') {
+    let list;
+    try { list = await refreshRecalls(foyer.id); }
+    catch (err) { console.warn('rappels', err.message); list = listRecalls(db); }
+    const codes = new Set(stockCodes(db).map((c) => Number(String(c).replace(/\D/g, ''))));
+    return send(res, 200, { rappels: list.filter((r) => codes.has(Number(r.gtin))), verifieLe: recallsCheckedAt(db) });
+  }
+
   if (route === 'GET /api/push/key') return send(res, 200, { publicKey: VAPID.publicKey });
   if (route === 'POST /api/push/subscribe') {
     let b; try { b = await readJson(req); } catch (err) { return fail(res, 400, err.message); }
@@ -450,11 +460,33 @@ async function notifyMembers(subs, payload) {
 }
 function dbForSub(sub) { for (const [id, db] of foyerDbs) if (listSubscriptions(db).some((x) => x.endpoint === sub.endpoint)) return db; return null; }
 
+/* ---------- Rappels de produits : au plus une vérification par foyer toutes les 12 h ---------- */
+const RECALL_INTERVAL = 12 * 3600000;
+async function refreshRecalls(foyerId, { force = false } = {}) {
+  const db = dbFor(foyerId);
+  const codes = stockCodes(db);
+  const hash = [...codes].sort().join(',');
+  if (!force && hash === recallsCheckedCodes(db) && Date.now() - recallsCheckedAt(db) < RECALL_INTERVAL) return listRecalls(db);
+  if (codes.length) {
+    const found = await fetchRecalls(codes);
+    const fresh = saveRecalls(db, found);
+    if (fresh.length) {
+      const subs = listSubscriptions(db);
+      if (subs.length) notifyMembers(subs, { title: fresh.length > 1 ? `${fresh.length} produits de ton stock sont rappelés` : 'Un produit de ton stock est rappelé', body: fresh.map((r) => r.libelle).join(', ').slice(0, 140), url: '#stock', tag: 'rappel' });
+      markRecallsNotified(db);
+    }
+  }
+  setRecallsChecked(db, hash);
+  return listRecalls(db);
+}
+
 /* ---------- Notifications planifiées ---------- */
 async function tick() {
   for (const f of A.listFoyers(accounts)) {
     try { await notifyFoyer(dbFor(f.id), VAPID); }
     catch (err) { console.warn('notifications', f.id, err.message); }
+    try { await refreshRecalls(f.id); }
+    catch (err) { console.warn('rappels', f.id, err.message); }
   }
 }
 const timer = setInterval(tick, 5 * 60000);
