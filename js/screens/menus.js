@@ -2,7 +2,7 @@
 import { h, icon, money, uid, toast, fmtDate, capitalize, round2, DAYS } from '../utils.js';
 import { getState, update, currentWeek } from '../store.js';
 import { computeBudget } from '../budget.js';
-import { MEAL_OPTIONS, OBJECTIFS, NIVEAUX, cleanJson, validateMenu, buildPrompt, ecartLineFor, mealCount, coursesTotal } from '../menu-schema.js';
+import { MEAL_OPTIONS, OBJECTIFS, NIVEAUX, cleanJson, validateMenu, buildPrompt, ecartLineFor, mealCount, coursesTotal, mealsWithoutLink } from '../menu-schema.js';
 import { openDialog, confirmDialog } from '../components/dialog.js';
 import { openRecipe, mealLabel, openFavoriteRecipe } from '../components/recipe.js';
 import { stockPromptLines } from '../stock.js';
@@ -145,7 +145,8 @@ function importZone(state, week) {
       s.menus.weeks.unshift(w);
       s.menus.currentId = w.id;
     });
-    toast('Menu importé pour la semaine');
+    const sansLien = isOn('liensRecettes') ? mealsWithoutLink(res.menu) : [];
+    toast(sansLien.length ? `Menu importé · ${sansLien.length} recette${sansLien.length > 1 ? 's' : ''} sans lien direct (recherche proposée à la place)` : 'Menu importé pour la semaine');
     window.scrollTo(0, 0);
   }
   function showErrors(list) {

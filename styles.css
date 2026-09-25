@@ -614,6 +614,7 @@ dialog.sheet-compact::before { content: ''; display: block; width: 36px; height:
 .recipe-card .row-actions { padding: 8px 10px; }
 .product-card .recipe-card-main { cursor: default; }
 .product-card-img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: var(--surface); flex: 0 0 auto; }
+.sheet-head-tools { display: flex; gap: 2px; margin-left: auto; }
 .publish-preview { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface-2); border-radius: var(--r); }
 .publish-preview svg { width: 20px; height: 20px; flex: 0 0 auto; }
 .feed-act { display: flex; align-items: center; gap: 10px; padding: 6px 14px; color: var(--muted); font-size: 0.9rem; }

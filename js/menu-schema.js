@@ -8,8 +8,8 @@ export const SCHEMA_TEXT = `{
   "jours": [
     {
       "jour": "lundi",
-      "midi": { "nom": "Salade de lentilles", "temps": 15, "tags": ["végé", "froid"], "recette": "Étapes courtes…", "lien": "https://www.marmiton.org/recettes/…" },
-      "soir": { "nom": "Poulet au citron, riz", "temps": 35, "tags": [], "recette": "Étapes courtes…", "lien": null }
+      "midi": { "nom": "Salade de lentilles", "temps": 15, "tags": ["végé", "froid"], "recette": "Étapes courtes…", "lien": "https://www.marmiton.org/recettes/recette_…(page exacte de la recette).aspx" },
+      "soir": { "nom": "Poulet au citron, riz", "temps": 35, "tags": [], "recette": "Étapes courtes…", "lien": "https://www.750g.com/…(page exacte de la recette).htm" }
     }
   ],
   "courses": [
@@ -41,6 +41,11 @@ export function cleanJson(text) {
 const isStr = (v) => typeof v === 'string';
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 export const isUrl = (v) => typeof v === 'string' && /^https?:\/\/[^\s]+$/i.test(v.trim());
+/** Page de recherche ou de catégorie (pas une recette précise). */
+export const isSearchUrl = (v) => typeof v === 'string' && /recherche|\/search|[?&](q|aqt|s|query)=/i.test(v);
+export const directLink = (v) => (isUrl(v) && !isSearchUrl(v) ? v.trim() : null);
+/** Repas sans lien direct dans un menu importé. */
+export const mealsWithoutLink = (menu) => (menu.jours || []).flatMap((d) => [d.midi, d.soir]).filter((m) => m && !m.lien).map((m) => m.nom);
 /** Lien de recherche Marmiton pour un plat sans adresse connue. */
 export const searchLinkFor = (nom) => `https://www.marmiton.org/recettes/recherche.aspx?aqt=${encodeURIComponent(String(nom || '').trim()).replace(/%20/g, '+')}`;
 const POUR_RE = new RegExp(`^(${DAYS.join('|')}) (midi|soir)$`);
@@ -124,7 +129,7 @@ export function validateMenu(obj) {
 }
 
 function normalize(obj) {
-  const meal = (m) => (m ? { nom: m.nom.trim(), temps: m.temps, tags: m.tags || [], recette: m.recette, lien: isUrl(m.lien) ? m.lien.trim() : null } : null);
+  const meal = (m) => (m ? { nom: m.nom.trim(), temps: m.temps, tags: m.tags || [], recette: m.recette, lien: directLink(m.lien) } : null);
   return {
     semaine: obj.semaine,
     personnes: obj.personnes,
@@ -208,18 +213,19 @@ export function buildPrompt(form, budget, ecartLine, extraLines = [], opts = {})
     '6. Recettes courtes : 3 à 6 étapes numérotées, verbes à l\'impératif, sans blabla, avec les temps de cuisson.',
     '7. "batch_cooking" : 2 à 4 préparations à faire le week-end qui font gagner du temps en semaine. "conseils" : 1 à 3 astuces concrètes (conservation, promo probable, substitution).',
     '8. Les tags sont courts et utiles : végé, rapide, froid, à emporter, batch, restes, enfant.',
-    opts.liens === false ? '9. Laisse "lien" à null.' : '9. "lien" est obligatoire pour chaque repas : l\'adresse exacte d\'une recette en ligne que tu connais avec certitude (Marmiton, 750g, Cuisine AZ, Journal des Femmes…). Si tu n\'es pas certain de l\'adresse, mets l\'adresse de recherche Marmiton du plat : https://www.marmiton.org/recettes/recherche.aspx?aqt=nom+du+plat (mots séparés par +). N\'invente jamais une adresse de page.',
+    opts.liens === false ? '9. Laisse "lien" à null.' : '9. "lien" est obligatoire pour chaque repas, et ce doit être la page d\'une recette précise, jamais une page de recherche ni une page de catégorie. Cherche réellement chaque recette sur le web (Marmiton, 750g, Cuisine AZ, Journal des Femmes, Cuisine Actuelle, Ptitchef, Elle à table…) avec ton outil de recherche si tu en as un, ouvre la page pour vérifier qu\'elle existe et qu\'elle correspond au plat, puis recopie son adresse exacte. Adapte le nom du plat au titre de la recette trouvée si besoin. Interdit : inventer une adresse, donner un lien de recherche (recherche.aspx, /search, ?q=…), ou laisser null.',
     '',
     '## Avant de répondre, vérifie',
     `- ${nbJours} jours exactement, avec les bons noms de jours en minuscules ; ${moments.join(' et ')} rempli${moments.length > 1 ? 's' : ''} pour chaque jour, l'autre moment à null si non demandé.`,
     '- Aucun allergène listé, aucun article déjà à la maison dans la liste, total sous le budget.',
+    opts.liens === false ? null : '- Chaque "lien" ouvre la page d\'une recette précise que tu as vérifiée (pas une recherche, pas une adresse devinée).',
     '- JSON strictement valide : guillemets doubles, pas de virgule finale, pas de commentaire.',
     '',
     'Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ni après, sans balises markdown, en respectant exactement ce schéma :',
     '',
     SCHEMA_TEXT,
   );
-  return lines.join('\n');
+  return lines.filter((l) => l != null).join('\n');
 }
 
 /** Phrase d'écart pour la dernière semaine validée, ou null. */
@@ -247,7 +253,7 @@ export const RECIPE_SCHEMA_TEXT = `{
     { "article": "Crème fraîche", "quantite": "10 cl", "en_stock": false }
   ],
   "recette": "1. Couper les légumes.\n2. Saisir le poulet.\n3. Ajouter les légumes, cuire 10 min.",
-  "lien": "https://www.marmiton.org/recettes/… ou null"
+  "lien": "https://…(page exacte de la recette, obligatoire)"
 }`;
 
 /** Valide une recette seule. Retourne { ok, recipe } ou { ok: false, errors }. */
@@ -263,7 +269,7 @@ export function validateRecipe(obj) {
   return {
     ok: true,
     recipe: {
-      nom: obj.nom.trim(), temps: isNum(obj.temps) ? obj.temps : 30, tags: obj.tags || [], recette: obj.recette, personnes: Number.isInteger(obj.personnes) && obj.personnes > 0 ? obj.personnes : 2, lien: isUrl(obj.lien) ? obj.lien.trim() : null,
+      nom: obj.nom.trim(), temps: isNum(obj.temps) ? obj.temps : 30, tags: obj.tags || [], recette: obj.recette, personnes: Number.isInteger(obj.personnes) && obj.personnes > 0 ? obj.personnes : 2, lien: directLink(obj.lien),
       ingredients: (obj.ingredients || []).filter((i) => i && isStr(i.article) && i.article.trim()).map((i) => ({ article: i.article.trim(), quantite: i.quantite == null ? '' : String(i.quantite), rayon: isStr(i.rayon) ? i.rayon : 'Autre', prix_estime: isNum(i.prix_estime) ? i.prix_estime : 0, enStock: !!i.en_stock })),
     },
   };
@@ -290,7 +296,7 @@ export function buildTonightPrompt({ personnes, tempsMax, regime, allergies }, s
     'Consignes :',
     '- Utilise d\'abord les produits proches de leur date limite, puis le reste du stock ; limite les achats à 3 articles maximum, marqués "en_stock": false.',
     '- Recette courte : 3 à 6 étapes, sans blabla.',
-    '- "lien" obligatoire : l\'adresse exacte d\'une recette en ligne que tu connais avec certitude, sinon l\'adresse de recherche Marmiton du plat (https://www.marmiton.org/recettes/recherche.aspx?aqt=nom+du+plat). N\'invente jamais une adresse de page.',
+    '- "lien" obligatoire : la page d\'une recette précise trouvée sur le web (Marmiton, 750g, Cuisine AZ, Journal des Femmes…), vérifiée avec ton outil de recherche. Jamais une page de recherche, jamais une adresse inventée, jamais null.',
     '',
     'Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après, sans balises markdown, selon ce schéma :',
     '',

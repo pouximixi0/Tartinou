@@ -92,7 +92,7 @@ Sans framework ni bundler côté client, sans dépendance npm côté serveur. No
 <img src="docs/captures/04-menus.png" width="260" align="right" alt="Écran Menus">
 
 - **Prompt pour Claude** : nombre de convives, objectif (équilibré, économique, rapide, batch cooking…), niveau, équipement, allergènes du foyer, stock et produits urgents, « restes d'abord », recettes favorites à replacer.
-- Le prompt exige pour **chaque recette un lien** vers une recette en ligne (Marmiton, 750g, Cuisine AZ…), sinon un lien de recherche Marmiton du plat. Le lien est cliquable dans l'app, et une icône signale chaque repas.
+- Le prompt exige pour **chaque recette un lien direct** vers la page d'une recette précise (Marmiton, 750g, Cuisine AZ…), trouvée et vérifiée sur le web par l'IA ; les liens de recherche et les adresses inventées sont interdits. Le lien est cliquable dans l'app ; si un repas arrive quand même sans lien direct, l'app propose une recherche à la place.
 - Import du JSON validé strictement ; les menus et repas importés se **suppriment** individuellement ou par semaine.
 - **« Que cuisiner ce soir ? »** : une recette à partir de ce qui périme.
 - Fiche recette : convives ajustables (quantités recalculées), **« J'ai cuisiné ce plat »** retire les ingrédients du stock, favoris remis au menu en un geste, partage au foyer ou à tout le monde.
