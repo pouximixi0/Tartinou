@@ -1,6 +1,6 @@
 {
   "name": "tartinou",
-  "version": "2.13.2",
+  "version": "2.13.3",
   "private": true,
   "description": "Dépenses, menus de la semaine et stock alimentaire. PWA + API SQLite sans dépendance.",
   "type": "module",

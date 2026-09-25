@@ -6,14 +6,14 @@ import { getState, update } from '../store.js';
 import { EMPLACEMENTS, CATEGORIES, UNITES, DATE_TYPES, uniteById, emplacementById, defaultDlc, defaultDdm, addStockItem, removeStockItem, adjustStockQty, addARacheter, fmtQte, prixLabel, valueOf, priceInsight, knownStores, allergenConflicts } from '../stock.js';
 import { printLabels } from '../qr.js';
 import { lookupProduct, rememberProduct, searchProducts, baseLabel } from '../off.js';
-import { confirmDialog } from './dialog.js';
+import { confirmDialog, openDialog } from './dialog.js';
 import { openWasteDialog } from './waste-dialog.js';
 import { stepper } from './stepper.js';
 import { scanOnce } from '../scanner.js';
 import { openPublishSheet } from './publish-sheet.js';
 import { recallsFor } from '../recalls.js';
 import { recallBlock } from './recall-dialog.js';
-import { fetchOpenPrices, sortPrices, savedPosition, askPosition, positionGranted, fmtKm } from '../prices.js';
+import { fetchOpenPrices, sortPrices, savedPosition, askPosition, positionGranted, positionFromCity, positionLabel, positionCoarse, fmtKm } from '../prices.js';
 import { isOn } from '../modules.js';
 
 const DLC_SHORTCUTS = [['Sans', null], ['+3 j', 3], ['+1 sem', 7], ['+1 mois', 30], ['+3 mois', 90], ['+6 mois', 180], ['+1 an', 365]];
@@ -199,11 +199,33 @@ export function openProductSheet({ code = null, product = null, item = null, def
     const pos = savedPosition();
     const sorted = sortPrices(openPrices, pos).slice(0, 6);
     const locate = async () => { try { await askPosition(); loadOpenPrices(true); } catch (e) { toast(e.message); } };
+    // Choisir sa position : GPS, ou une ville tapée (utile sur ordinateur, où le navigateur ne connaît que la ville du fournisseur d'accès).
+    const changePosition = () => {
+      const input = h('input', { type: 'text', class: 'input', placeholder: 'Ville ou code postal', autocomplete: 'off', value: pos?.source === 'ville' ? pos.label.replace(/ \(\d+\)$/, '') : '' });
+      const useCity = async () => { try { await positionFromCity(input.value); dlg.close(); loadOpenPrices(true); } catch (e) { toast(e.message); } };
+      input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); useCity(); } });
+      const dlg = openDialog({
+        title: 'Où chercher les magasins ?',
+        cls: 'sheet-compact',
+        content: [
+          pos ? h('p', { class: 'muted small' }, `Position actuelle : ${positionLabel(pos)}${pos.source === 'gps' && pos.precision ? ` (précision ${pos.precision >= 1000 ? `${Math.round(pos.precision / 1000)} km` : `${pos.precision} m`})` : ''}.`) : null,
+          h('div', { class: 'field' }, h('label', null, 'Ville ou code postal'), input),
+        ],
+        actions: [
+          h('button', { type: 'button', class: 'btn btn-secondary', onclick: async () => { dlg.close(); await locate(); } }, icon('pin'), 'Utiliser le GPS'),
+          h('button', { type: 'button', class: 'btn btn-primary', onclick: useCity }, 'Utiliser cette ville'),
+        ],
+      });
+      setTimeout(() => input.focus(), 50);
+    };
     pricesBox.replaceChildren(
-      h('p', { class: 'muted small open-prices-head' }, `${openPrices.length} prix relevé${openPrices.length > 1 ? 's' : ''} en magasin (Open Prices)${pos ? ', du plus proche au plus loin' : ', les plus récents'}`,
-        pos ? [' · ', h('button', { type: 'button', class: 'link small', onclick: locate }, icon('pin'), 'Actualiser ma position')] : null),
-      pos ? null : h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: locate }, icon('pin'), 'Trier par distance (près de moi)'),
-      pos && sorted[0]?.km > 60 ? h('p', { class: 'muted small' }, 'Aucun relevé à moins de 60 km de toi : voici les plus proches quand même.') : null,
+      h('p', { class: 'muted small open-prices-head' }, `${openPrices.length} prix relevé${openPrices.length > 1 ? 's' : ''} en magasin (Open Prices)${pos ? ` près de ${positionLabel(pos)}` : ', les plus récents'}`,
+        pos ? [' · ', h('button', { type: 'button', class: 'link small', onclick: changePosition }, icon('pin'), 'Changer')] : null),
+      pos ? null : h('div', { class: 'row-actions' },
+        h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: locate }, icon('pin'), 'Près de moi (GPS)'),
+        h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: changePosition }, 'Indiquer ma ville')),
+      pos && positionCoarse(pos) ? h('p', { class: 'muted small' }, `Position approximative (réseau, ± ${Math.round(pos.precision / 1000)} km) : sur un ordinateur, indique plutôt ta ville avec « Changer ».`) : null,
+      pos && sorted[0]?.km > 60 ? h('p', { class: 'muted small' }, 'Aucun relevé à moins de 60 km : voici les plus proches quand même.') : null,
       h('div', { class: 'chips chips-sm' }, sorted.map((p) => h('button', { type: 'button', class: 'chip chip-sm chip-price', title: `Relevé le ${fmtDate(p.date, { day: 'numeric', month: 'long', year: 'numeric' })}`, onclick: () => {
         d.prix = p.prix; prixInput.value = String(p.prix).replace('.', ',');
         if (isOn('prixHistorique')) { d.magasin = p.magasin; magasinInput.value = p.magasin; }

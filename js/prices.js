@@ -69,16 +69,49 @@ export async function positionGranted() {
 export function savedPosition() {
   try { const p = JSON.parse(localStorage.getItem(POS_KEY)); return p && typeof p.lat === 'number' && Date.now() - p.at < 30 * 86400000 ? p : null; } catch { return null; }
 }
-export function askPosition() {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) return reject(new Error('Pas de géolocalisation sur cet appareil.'));
-    navigator.geolocation.getCurrentPosition(
-      (g) => { const p = { lat: g.coords.latitude, lon: g.coords.longitude, at: Date.now() }; try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch {} resolve(p); },
-      (e) => reject(new Error(e.code === 1 ? 'Position refusée : autorise la localisation pour trier par distance.' : 'Position indisponible pour le moment.')),
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
-    );
-  });
+const savePosition = (p) => { try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch {} return p; };
+const geo = (opts) => new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, opts));
+
+/**
+ * Position de l'appareil : GPS d'abord (précis, quelques secondes), sinon réseau. Sur un
+ * ordinateur, le navigateur ne connaît souvent que la ville du fournisseur d'accès : la
+ * précision est alors gardée pour prévenir, et « Changer » permet d'indiquer sa ville.
+ */
+export async function askPosition() {
+  if (!navigator.geolocation) throw new Error('Pas de géolocalisation sur cet appareil.');
+  let g;
+  try { g = await geo({ enableHighAccuracy: true, timeout: 12000, maximumAge: 120000 }); }
+  catch (e) {
+    if (e && e.code === 1) throw new Error('Position refusée : autorise la localisation, ou indique ta ville.');
+    try { g = await geo({ enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }); }
+    catch { throw new Error('Position indisponible pour le moment : indique ta ville.'); }
+  }
+  const p = savePosition({ lat: g.coords.latitude, lon: g.coords.longitude, precision: Math.round(g.coords.accuracy || 0), source: 'gps', at: Date.now(), label: '' });
+  reverseCity(p).then((label) => { if (label) savePosition({ ...p, label }); }).catch(() => {});
+  return p;
 }
+/** Ville ou code postal tapé : géocodage par l'API Adresse (data.gouv.fr). */
+export async function positionFromCity(query) {
+  const q = String(query || '').trim();
+  if (q.length < 2) throw new Error('Indique une ville ou un code postal.');
+  const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=1`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error('Service d’adresses indisponible.');
+  const f = (await res.json()).features?.[0];
+  if (!f) throw new Error(`« ${q} » : lieu introuvable.`);
+  const [lon, lat] = f.geometry.coordinates;
+  const pr = f.properties;
+  return savePosition({ lat, lon, precision: 0, source: 'ville', at: Date.now(), label: pr.type === 'municipality' ? `${pr.city} (${pr.postcode})` : pr.label });
+}
+async function reverseCity(p) {
+  const res = await fetch(`https://api-adresse.data.gouv.fr/reverse/?lon=${p.lon}&lat=${p.lat}`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) });
+  if (!res.ok) return '';
+  const pr = (await res.json()).features?.[0]?.properties;
+  return pr ? `${pr.city || pr.name}${pr.postcode ? ` (${pr.postcode})` : ''}` : '';
+}
+/** Libellé lisible d'une position gardée. */
+export const positionLabel = (p) => (!p ? '' : p.label || (p.source === 'gps' ? 'ta position' : 'position choisie'));
+/** Vrai si la position vient du réseau et non du GPS (précision de plusieurs kilomètres). */
+export const positionCoarse = (p) => !!p && p.source === 'gps' && p.precision > 3000;
 /** Ajoute `km` et trie : du plus proche au plus loin si la position est connue, sinon du plus récent au plus ancien. */
 export function sortPrices(list, pos) {
   const withKm = list.map((p) => ({ ...p, km: pos && p.lat != null && p.lon != null ? distanceKm(pos, p) : null }));
