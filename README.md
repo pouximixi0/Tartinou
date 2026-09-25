@@ -115,7 +115,7 @@ Sans framework ni bundler côté client, sans dépendance npm côté serveur. No
 <img src="docs/captures/06-stock.png" width="260" align="right" alt="Écran Stock">
 
 - **Scan** : caméra (BarcodeDetector natif, ZXing en secours), photo, saisie manuelle, ou étiquettes QR maison pour les produits sans code-barres.
-- **Open Food Facts** remplit nom, marque, image, **Nutri-Score** (pastille colorée dans la liste), Eco-Score, allergènes. Sans code-barres, taper le nom du produit propose les correspondances Open Food Facts : un tap remplit la fiche.
+- **Quatre bases Open Facts** : Open Food Facts (alimentation), Open Products Facts (ménager et divers), Open Beauty Facts (hygiène, cosmétiques), Open Pet Food Facts (animaux). Un code-barres est cherché dans les quatre ; la fiche reçoit nom, marque, image, **Nutri-Score** (pastille colorée dans la liste), Eco-Score, allergènes. Sans code-barres, taper le nom du produit propose les correspondances des quatre bases, avec indicateur de chargement : un tap remplit la fiche.
 - **DLC et DDM** distinguées : une DLC dépassée se jette, une DDM dépassée se goûte. Tri par urgence, filtres par emplacement.
 - **Prix par magasin** avec historique : « plus cher que la dernière fois ».
 - **Allergènes du foyer** signalés sur les produits, **portions restantes**, quantité au stepper.
@@ -325,7 +325,7 @@ Une seule feuille de style. Police système, fond papier et encre, un accent par
 
 - **Réglages → Sauvegarde → Exporter** télécharge `tartinou-AAAA-MM-JJ.json` ; **Importer** remplace tout (sur le serveur aussi) après confirmation. Le champ `version` permet à `migrate()` de convertir les anciens formats.
 - Côté serveur, sauvegarde `/var/lib/foyer/` (avec les fichiers `-wal`).
-- Services externes : Open Food Facts (seul le code-barres est envoyé), jsDelivr pour ZXing et le générateur de QR quand le navigateur en a besoin, images produit sur `images.openfoodfacts.org`. Rien d'autre ne sort du serveur.
+- Services externes : Open Food Facts, Open Products Facts, Open Beauty Facts et Open Pet Food Facts (seul le code-barres ou le nom tapé est envoyé), jsDelivr pour ZXing et le générateur de QR quand le navigateur en a besoin, images produit sur `images.openfoodfacts.org`. Rien d'autre ne sort du serveur.
 
 ### Règle du report sur un cycle partiellement suivi
 

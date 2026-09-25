@@ -5,7 +5,7 @@ import { h, icon, toast, todayISO, addDays, parseAmount, fmtDate, money } from '
 import { getState, update } from '../store.js';
 import { EMPLACEMENTS, CATEGORIES, UNITES, DATE_TYPES, uniteById, emplacementById, defaultDlc, defaultDdm, addStockItem, removeStockItem, adjustStockQty, addARacheter, fmtQte, prixLabel, valueOf, priceInsight, knownStores, allergenConflicts } from '../stock.js';
 import { printLabels } from '../qr.js';
-import { lookupProduct, rememberProduct, searchProducts } from '../off.js';
+import { lookupProduct, rememberProduct, searchProducts, baseLabel } from '../off.js';
 import { confirmDialog } from './dialog.js';
 import { openWasteDialog } from './waste-dialog.js';
 import { stepper } from './stepper.js';
@@ -78,22 +78,28 @@ export function openProductSheet({ code = null, product = null, item = null, def
     if (q.length < 3) return hideSuggest();
     suggestTimer = setTimeout(async () => {
       const seq = ++suggestSeq;
-      const found = await searchProducts(q);
-      if (closed || seq !== suggestSeq || found === null) return;
-      if (nomInput.value.trim() !== q) return hideSuggest();
-      if (!found.length) {
-        if (!searchProducts.limited) return hideSuggest();
-        suggestBox.replaceChildren(h('li', { class: 'off-suggest-head muted small' }, 'Open Food Facts limite les recherches : réessaie dans une minute.'));
-        suggestBox.hidden = false;
-        return;
-      }
-      suggestBox.replaceChildren(
-        h('li', { class: 'off-suggest-head muted small' }, 'Sur Open Food Facts :'),
-        ...found.map((p) => h('li', { role: 'option' }, h('button', { type: 'button', class: 'off-suggest-item', onclick: () => pickSuggestion(p) },
-          p.image ? h('img', { src: p.image, alt: '', loading: 'lazy', onerror: (ev) => ev.target.replaceWith(icon('box')) }) : icon('box'),
-          h('span', { class: 'off-suggest-text' }, h('strong', null, p.nom), h('span', { class: 'muted small block' }, [p.marque, p.quantite].filter(Boolean).join(' · ') || 'marque inconnue')),
-          p.nutriscore ? h('span', { class: `score-mini score-${p.nutriscore}` }, p.nutriscore.toUpperCase()) : null))));
+      // Chargement visible tout de suite : la recherche interroge quatre bases et peut prendre quelques secondes.
+      suggestBox.replaceChildren(h('li', { class: 'off-suggest-head muted small off-suggest-loading' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), `Recherche de « ${q} » dans Open Food Facts, Open Products Facts, Open Beauty Facts…`));
       suggestBox.hidden = false;
+      // Affichage progressif : chaque base qui répond alimente la liste, l'indicateur reste tant qu'il en manque.
+      const render = (found, pending) => {
+        if (closed || seq !== suggestSeq) return;
+        if (nomInput.value.trim() !== q) return hideSuggest();
+        const rows = found.length ? [
+          h('li', { class: 'off-suggest-head muted small' }, `${found.length} produit${found.length > 1 ? 's' : ''} trouvé${found.length > 1 ? 's' : ''} :`),
+          ...found.map((p) => h('li', { role: 'option' }, h('button', { type: 'button', class: 'off-suggest-item', onclick: () => pickSuggestion(p) },
+            p.image ? h('img', { src: p.image, alt: '', loading: 'lazy', onerror: (ev) => ev.target.replaceWith(icon('box')) }) : icon('box'),
+            h('span', { class: 'off-suggest-text' }, h('strong', null, p.nom), h('span', { class: 'muted small block' }, [p.marque, p.quantite, p.base && p.base !== 'off' ? baseLabel(p.base) : null].filter(Boolean).join(' · ') || 'marque inconnue')),
+            p.nutriscore ? h('span', { class: `score-mini score-${p.nutriscore}` }, p.nutriscore.toUpperCase()) : null))),
+        ] : [];
+        if (pending > 0) rows.push(h('li', { class: 'off-suggest-head muted small off-suggest-loading' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), found.length ? `Encore ${pending} base${pending > 1 ? 's' : ''} en cours…` : `Recherche de « ${q} » dans Open Food Facts, Open Products Facts, Open Beauty Facts…`));
+        else if (!found.length) rows.push(h('li', { class: 'off-suggest-head muted small' }, searchProducts.limited ? 'Trop de recherches d’un coup : réessaie dans une minute.' : `Aucun produit « ${q} » dans les bases Open Facts. Tu peux continuer à la main.`));
+        suggestBox.replaceChildren(...rows);
+        suggestBox.hidden = false;
+      };
+      const found = await searchProducts(q, render);
+      if (closed || seq !== suggestSeq || found === null) return;
+      render(found, 0);
     }, 650);
   }
   function pickSuggestion(p) {
@@ -225,7 +231,7 @@ export function openProductSheet({ code = null, product = null, item = null, def
   async function doLookup(force = false) {
     if (!d.code) return;
     lookupLine.hidden = false;
-    lookupLine.replaceChildren('Recherche du produit sur Open Food Facts…');
+    lookupLine.replaceChildren(h('span', { class: 'spinner', 'aria-hidden': 'true' }), ' Recherche du code-barres dans les bases Open Facts (alimentation, ménager, hygiène, animaux)…');
     const res = await lookupProduct(d.code, { force });
     if (closed) return;
     if (res.product) {
@@ -233,9 +239,9 @@ export function openProductSheet({ code = null, product = null, item = null, def
       applyProduct(res.product);
       drawDetails();
       drawAllergens();
-      lookupLine.replaceChildren(res.source === 'cache' ? 'Produit déjà connu.' : 'Trouvé sur Open Food Facts.', ' ', h('button', { type: 'button', class: 'link small', onclick: () => doLookup(true) }, 'Actualiser'));
+      lookupLine.replaceChildren(res.source === 'cache' ? 'Produit déjà connu.' : `Trouvé sur ${baseLabel(res.product.base)}.`, ' ', h('button', { type: 'button', class: 'link small', onclick: () => doLookup(true) }, 'Actualiser'));
     } else if (res.notFound) {
-      lookupLine.replaceChildren('Produit inconnu d’Open Food Facts : donne-lui un nom, il sera mémorisé pour la prochaine fois.');
+      lookupLine.replaceChildren('Code inconnu des bases Open Facts (alimentation, ménager, hygiène, animaux) : donne-lui un nom, il sera mémorisé pour la prochaine fois.');
       nomInput.focus();
     } else {
       lookupLine.replaceChildren('Pas de connexion : saisis le nom, ou ', h('button', { type: 'button', class: 'link small', onclick: () => doLookup(true) }, 'réessayer'), '.');

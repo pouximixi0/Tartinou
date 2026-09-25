@@ -1,10 +1,19 @@
-// Client Open Food Facts : un code-barres → nom, marque, image, scores.
+// Client des bases « Open Facts » : Open Food Facts (alimentation), Open Products Facts
+// (produits ménagers et divers), Open Beauty Facts (hygiène, cosmétiques), Open Pet Food
+// Facts (animaux). Même API pour les quatre. Un code-barres → nom, marque, image, scores.
 // Les produits sont mémorisés dans state.stock.products (donc en base) pour
 // fonctionner hors ligne et éviter de rappeler l'API.
 import { getState, update } from './store.js';
 import { guessCategorie, guessEmplacement } from './stock.js';
 
-const BASE = 'https://world.openfoodfacts.org/api/v2/product/';
+/** Bases interrogées, par ordre de priorité quand un même code existe dans plusieurs. */
+export const BASES = [
+  { id: 'off', host: 'world.openfoodfacts.org', label: 'Open Food Facts', categorie: null },
+  { id: 'opf', host: 'world.openproductsfacts.org', label: 'Open Products Facts', categorie: 'Hygiène & entretien' },
+  { id: 'obf', host: 'world.openbeautyfacts.org', label: 'Open Beauty Facts', categorie: 'Hygiène & entretien' },
+  { id: 'opff', host: 'world.openpetfoodfacts.org', label: 'Open Pet Food Facts', categorie: 'Autre' },
+];
+export const baseLabel = (id) => (BASES.find((b) => b.id === id) || BASES[0]).label;
 const FIELDS = ['code', 'product_name', 'product_name_fr', 'generic_name_fr', 'brands', 'quantity', 'categories', 'categories_tags', 'image_front_small_url', 'image_front_url',
   'nutriscore_grade', 'nova_group', 'ecoscore_grade', 'environmental_score_grade', 'allergens_tags', 'labels_tags', 'ingredients_text_fr', 'ingredients_text', 'nutriments'].join(',');
 const CACHE_DAYS = 45;
@@ -16,10 +25,11 @@ const ALLERGENES = {
 const tagName = (t) => String(t).replace(/^[a-z]{2}:/, '');
 const grade = (g) => (typeof g === 'string' && /^[a-e]$/.test(g) ? g : null);
 
-export function normalizeOff(code, p) {
+export function normalizeOff(code, p, base = BASES[0]) {
   const nom = (p.product_name_fr || p.product_name || p.generic_name_fr || '').trim();
   const catsText = [p.categories, ...(p.categories_tags || [])].filter(Boolean).join(' ');
-  const categorie = guessCategorie(catsText, nom);
+  const guessed = guessCategorie(catsText, nom);
+  const categorie = base.categorie && guessed === 'Autre' ? base.categorie : guessed;
   const n = p.nutriments || {};
   const pick = (k) => (Number.isFinite(Number(n[k])) ? Math.round(Number(n[k]) * 10) / 10 : null);
   const nutriments = {
@@ -36,37 +46,57 @@ export function normalizeOff(code, p) {
     labels: (p.labels_tags || []).map(tagName).filter((l) => /bio|organic|label-rouge|aoc|aop|igp|vegan|vegetarian|fair-trade|equitable|france/.test(l)).slice(0, 5).map((l) => l.replace(/-/g, ' ')),
     ingredients: String(p.ingredients_text_fr || p.ingredients_text || '').slice(0, 600),
     nutriments: Object.values(nutriments).some((v) => v != null) ? nutriments : null,
-    source: 'off', fetchedAt: Date.now(),
+    source: 'off', base: base.id, fetchedAt: Date.now(),
   };
 }
 
 /** Interroge Open Food Facts. Résout null si le produit est inconnu ; lève en cas d'erreur réseau. */
-const SEARCH = 'https://world.openfoodfacts.org/cgi/search.pl';
 let searchCtrl = null;
 const searchCache = new Map(); // requête → produits (Open Food Facts limite la recherche à 10 appels par minute)
 /**
- * Recherche par nom (saisie à la main) : jusqu'à 8 produits { code, nom, marque, quantite, image, nutriscore }.
+ * Recherche par nom (saisie à la main) dans les quatre bases : jusqu'à 12 produits
+ * { code, nom, marque, quantite, image, nutriscore, base }. `onUpdate(produits, basesEnAttente)`
+ * est appelé à chaque base qui répond, pour afficher sans attendre la plus lente.
  * Retourne null si une recherche plus récente a remplacé celle-ci ; `searchProducts.limited` vaut true
- * quand Open Food Facts a refusé l'appel (trop de recherches).
+ * quand une base a refusé l'appel (trop de recherches).
  */
-export async function searchProducts(query) {
+export async function searchProducts(query, onUpdate = null) {
   const q = String(query || '').trim().toLowerCase();
   if (q.length < 3) return [];
-  if (searchCache.has(q)) return searchCache.get(q);
+  if (searchCache.has(q)) { onUpdate?.(searchCache.get(q), 0); return searchCache.get(q); }
   if (searchCtrl) searchCtrl.abort();
   searchCtrl = new AbortController();
   const ctrl = searchCtrl;
-  const timer = setTimeout(() => ctrl.abort(), 8000);
+  const timer = setTimeout(() => ctrl.abort(), 9000);
+  searchProducts.limited = false;
   try {
-    // Les virgules de `fields` doivent rester telles quelles : Open Food Facts ne décode pas %2C.
-    const url = `${SEARCH}?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=8&lc=fr&fields=code,product_name,product_name_fr,brands,quantity,image_front_small_url,nutriscore_grade`;
-    const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl.signal });
-    searchProducts.limited = res.status === 429;
-    if (!res.ok) return [];
-    const data = await res.json();
-    const products = (data.products || [])
-      .map((p) => ({ code: String(p.code || ''), nom: (p.product_name_fr || p.product_name || '').trim(), marque: (p.brands || '').split(',')[0].trim(), quantite: (p.quantity || '').trim(), image: p.image_front_small_url || null, nutriscore: grade(p.nutriscore_grade) }))
-      .filter((p) => p.code && p.nom);
+    // Les quatre bases en parallèle ; les virgules de `fields` restent telles quelles (le serveur ne décode pas %2C).
+    const one = async (base) => {
+      const url = `https://${base.host}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=6&lc=fr&fields=code,product_name,product_name_fr,brands,quantity,image_front_small_url,nutriscore_grade`;
+      // Chaque base a 6 s ; une base lente n'empêche pas les autres de s'afficher.
+      const signal = typeof AbortSignal.any === 'function' ? AbortSignal.any([ctrl.signal, AbortSignal.timeout(6000)]) : ctrl.signal;
+      try {
+        const res = await fetch(url, { headers: { Accept: 'application/json' }, signal });
+        if (res.status === 429) searchProducts.limited = true;
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.products || [])
+          .map((p) => ({ code: String(p.code || ''), nom: (p.product_name_fr || p.product_name || '').trim(), marque: (p.brands || '').split(',')[0].trim(), quantite: (p.quantity || '').trim(), image: p.image_front_small_url || null, nutriscore: grade(p.nutriscore_grade), base: base.id }))
+          .filter((p) => p.code && p.nom);
+      } catch (e) { if (ctrl.signal.aborted) throw e; return []; }
+    };
+    const byBase = new Map();
+    const merged = () => { const seen = new Set(); return BASES.flatMap((b) => byBase.get(b.id) || []).filter((p) => !seen.has(p.code) && seen.add(p.code)).slice(0, 12); };
+    let pending = BASES.length;
+    await Promise.all(BASES.map(async (base) => {
+      const list = await one(base);
+      byBase.set(base.id, list);
+      pending -= 1;
+      if (!ctrl.signal.aborted && pending > 0) onUpdate?.(merged(), pending);
+    }));
+    if (ctrl.signal.aborted) return null;
+    const products = merged();
+    onUpdate?.(products, 0);
     searchCache.set(q, products);
     if (searchCache.size > 60) searchCache.delete(searchCache.keys().next().value);
     return products;
@@ -82,12 +112,21 @@ export async function fetchProduct(code) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 9000);
   try {
-    const res = await fetch(`${BASE}${encodeURIComponent(code)}.json?lc=fr&fields=${FIELDS}`, { headers: { Accept: 'application/json' }, signal: ctrl.signal });
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`Open Food Facts répond ${res.status}`);
-    const data = await res.json();
-    if (data.status !== 1 || !data.product) return null;
-    return normalizeOff(code, data.product);
+    const one = async (base) => {
+      const res = await fetch(`https://${base.host}/api/v2/product/${encodeURIComponent(code)}.json?lc=fr&fields=${FIELDS}`, { headers: { Accept: 'application/json' }, signal: ctrl.signal });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`${base.label} répond ${res.status}`);
+      const data = await res.json();
+      if (data.status !== 1 || !data.product) return null;
+      return normalizeOff(code, data.product, base);
+    };
+    // Les quatre bases en même temps ; on garde la première trouvée dans l'ordre de priorité.
+    const results = await Promise.allSettled(BASES.map(one));
+    const found = results.find((r) => r.status === 'fulfilled' && r.value);
+    if (found) return found.value;
+    const failure = results.find((r) => r.status === 'rejected');
+    if (failure && results.every((r) => r.status === 'rejected')) throw failure.reason;
+    return null;
   } finally {
     clearTimeout(timer);
   }
