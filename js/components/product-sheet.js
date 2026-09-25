@@ -10,6 +10,7 @@ import { confirmDialog } from './dialog.js';
 import { openWasteDialog } from './waste-dialog.js';
 import { stepper } from './stepper.js';
 import { scanOnce } from '../scanner.js';
+import { openPublishSheet } from './publish-sheet.js';
 import { isOn } from '../modules.js';
 
 const DLC_SHORTCUTS = [['Sans', null], ['+3 j', 3], ['+1 sem', 7], ['+1 mois', 30], ['+3 mois', 90], ['+6 mois', 180], ['+1 an', 365]];
@@ -313,7 +314,8 @@ export function openProductSheet({ code = null, product = null, item = null, def
         h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => quick('jete') }, icon('trash'), 'Jeté'),
         h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: toggleOpen }, item.ouvertLe ? `Ouvert le ${fmtDate(item.ouvertLe, { day: 'numeric', month: 'short' })}` : 'Ouvert aujourd’hui'),
         h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: toBuy }, icon('basket'), 'À racheter'),
-        isOn('etiquettesQR') ? h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => printLabels([item]).catch((e) => toast(e.message)) }, icon('image'), 'Étiquette QR') : null) : null,
+        isOn('etiquettesQR') ? h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => printLabels([item]).catch((e) => toast(e.message)) }, icon('image'), 'Étiquette QR') : null,
+        isOn('foyer') ? h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => openPublishSheet({ type: 'produit', texte: `partage un produit : ${d.nom || item.nom}`, apercu: d.nom || item.nom, payload: { nom: d.nom || item.nom, marque: d.marque || '', image: d.image || null, code: d.code || null, qte: d.qte, unite: d.unite, emplacement: d.emplacement, dlc: d.dlc || null, ddm: !!d.ddm, categorie: d.categorie, nutriscore: (currentProduct && currentProduct.nutriscore) || null, prix: d.prix ?? null, magasin: d.magasin || '' } }) }, icon('message'), 'Publier') : null) : null,
       h('details', { class: 'zone', open: editing && (d.seuilMin > 0 || !!d.notes) },
         h('summary', { class: 'zone-title' }, 'Plus d’options'),
         h('div', { class: 'zone-body' },

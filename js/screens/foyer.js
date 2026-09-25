@@ -12,6 +12,8 @@ import { shareText, menuText, shoppingListText, recipeText } from '../share.js';
 import { putMealInWeek, todayDayName } from '../planning.js';
 import { isOn } from '../modules.js';
 import { avatarEl } from '../avatar.js';
+import { openProductSheet } from '../components/product-sheet.js';
+import { fmtQte, emplacementById } from '../stock.js';
 
 const ui = { portee: 'tous', filtre: 'tout', openComments: new Set() };
 export const LAST_SEEN_KEY = 'foyer:flux-vu';
@@ -156,6 +158,8 @@ function postCard(p, me, ops) {
         ops.pin ? h('button', { type: 'button', class: 'btn-icon btn-icon-sm', 'aria-label': p.epingle ? 'Désépingler' : 'Épingler', 'aria-pressed': String(!!p.epingle), onclick: () => ops.pin(p) }, icon('flash')) : null,
         ops.canRemove(p) ? h('button', { type: 'button', class: 'btn-icon btn-icon-sm', 'aria-label': 'Supprimer', onclick: async () => { const ok = await confirmDialog({ title: 'Supprimer cette publication ?', message: p.texte, confirmLabel: 'Supprimer', danger: true }); if (ok) ops.remove(p); } }, icon('trash')) : null)),
     p.type === 'recette' && p.payload ? recipeCard(p.payload) : null,
+    p.type === 'produit' && p.payload ? productCard(p.payload) : null,
+    (p.type === 'menu' || p.type === 'liste') && p.payload?.mot ? richText(p.payload.mot) : null,
     p.type === 'menu' || p.type === 'liste' ? h('details', { class: 'post-attach' }, h('summary', null, p.texte), h('pre', { class: 'post-pre' }, p.payload?.texte || '')) : richText(p.texte),
     h('div', { class: 'post-actions' },
       reactionBar,
@@ -183,6 +187,22 @@ function recipeCard(r) {
     h('div', { class: 'row-actions' },
       isOn('favoris') ? h('button', { type: 'button', class: 'btn btn-secondary btn-sm', disabled: already, onclick: () => { update((s) => { s.recettes.push({ id: uid(), ...r, ajouteLe: todayISO() }); }); toast('Ajoutée à tes favoris'); } }, icon('check'), already ? 'Dans mes favoris' : 'Garder') : null,
       isOn('menus') ? h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: plan }, icon('plus'), 'Au menu') : null));
+}
+
+/** Produit du stock partagé : fiche résumée, « Au stock » ouvre la feuille produit pré-remplie. */
+function productCard(pr) {
+  const meta = [];
+  if (pr.marque) meta.push(pr.marque);
+  if (pr.qte != null) meta.push(fmtQte({ qte: pr.qte, unite: pr.unite }));
+  if (pr.emplacement) meta.push(emplacementById(pr.emplacement).nom);
+  if (pr.dlc) meta.push(`${pr.ddm ? 'DDM' : 'DLC'} ${fmtDate(pr.dlc, { day: 'numeric', month: 'short' })}`);
+  const nutri = isOn('nutriscore') && pr.nutriscore ? h('span', { class: `score-mini score-${pr.nutriscore}`, title: `Nutri-Score ${pr.nutriscore.toUpperCase()}` }, pr.nutriscore.toUpperCase()) : null;
+  const thumb = pr.image ? h('img', { class: 'product-card-img', src: pr.image, alt: '', loading: 'lazy', onerror: (ev) => ev.target.replaceWith(icon('box')) }) : icon('box');
+  return h('div', { class: 'recipe-card product-card' },
+    h('div', { class: 'recipe-card-main' }, thumb,
+      h('span', { class: 'recipe-card-text' }, h('strong', null, pr.nom, ' ', nutri), h('span', { class: 'muted small' }, meta.join(' · ')))),
+    isOn('stock') ? h('div', { class: 'row-actions' },
+      h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => openProductSheet({ code: pr.code || null, defaults: { nom: pr.nom, marque: pr.marque || '', image: pr.image || null, qte: pr.qte ?? 1, unite: pr.unite || 'piece', emplacement: pr.emplacement || 'placard', categorie: pr.categorie || 'Autre' } }) }, icon('plus'), 'Au stock')) : null);
 }
 
 function activityRow(a) {

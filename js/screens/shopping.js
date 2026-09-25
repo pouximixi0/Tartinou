@@ -8,6 +8,7 @@ import { findInStock } from '../stock.js';
 import { openRangerSheet } from '../components/ranger-sheet.js';
 import { aRacheterZone } from './stock.js';
 import { shareText, shoppingListText } from '../share.js';
+import { openPublishSheet } from '../components/publish-sheet.js';
 import { isOn } from '../modules.js';
 
 export function renderShopping() {
@@ -34,8 +35,9 @@ export function renderShopping() {
       frozen ? h('p', { class: 'validated-line' }, `Courses validées le ${fmtDate(week.validation.date, { day: 'numeric', month: 'long' })} : ticket `, h('span', { class: 'num' }, money(week.validation.montantReel)), ' pour ', h('span', { class: 'num' }, money(week.validation.estime)), ' estimés.') : null),
   );
 
-  if (isOn('partage')) root.append(h('div', { class: 'row-actions' },
-    h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => shareText({ title: 'Liste de courses', text: shoppingListText(week, items) }) }, icon('share'), 'Partager la liste')));
+  if (isOn('partage') || isOn('foyer')) root.append(h('div', { class: 'row-actions' },
+    isOn('foyer') ? h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => openPublishSheet({ type: 'liste', texte: 'Liste de courses de la semaine', apercu: `${items.length} article${items.length > 1 ? 's' : ''}`, payload: { texte: shoppingListText(week, items) } }) }, icon('message'), 'Publier dans le fil') : null,
+    isOn('partage') ? h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => shareText({ title: 'Liste de courses', text: shoppingListText(week, items) }) }, icon('share'), 'Partager') : null));
 
   if (frozen && !week.rangeAt && isOn('stock')) {
     root.append(h('button', { type: 'button', class: 'btn btn-secondary btn-block', onclick: () => rangerCourses(week, items) }, icon('box'), 'Ranger les courses dans le stock'));

@@ -2,7 +2,7 @@
 // ZXing et images Open Food Facts mis en cache à la première visite ; l'API
 // (/api/) et Open Food Facts ne passent jamais par le cache.
 // Incrémente VERSION à chaque déploiement.
-const VERSION = 'foyer-v2.8.0';
+const VERSION = 'foyer-v2.9.0';
 const RUNTIME = 'foyer-runtime';
 const ASSETS = [
   './',
@@ -51,6 +51,7 @@ const ASSETS = [
   './js/screens/onboarding.js',
   './js/screens/login.js',
   './js/screens/foyer.js',
+  './js/components/publish-sheet.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',

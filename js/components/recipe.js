@@ -7,6 +7,7 @@ import { openCookDialog } from './cook-dialog.js';
 import { stepper } from './stepper.js';
 import { isOn } from '../modules.js';
 import { searchLinkFor } from '../menu-schema.js';
+import { openPublishSheet } from './publish-sheet.js';
 
 export const mealLabel = (jour, moment) => `${capitalize(jour)} ${moment}`;
 
@@ -103,6 +104,7 @@ export function openRecipe(week, jour, moment) {
     actions: [
       isOn('favoris') ? h('button', { type: 'button', class: 'btn btn-secondary', onclick: favorite, disabled: isFav }, icon('check'), isFav ? 'Favori' : 'Favoris') : null,
       isOn('cuisine') ? h('button', { type: 'button', class: 'btn btn-primary', onclick: cook }, icon('pot'), cooked ? 'Cuisiné à nouveau' : 'J’ai cuisiné ce plat') : null,
+      isOn('foyer') ? h('button', { type: 'button', class: 'btn-icon', 'aria-label': 'Publier dans le fil', title: 'Publier dans le fil', onclick: () => openPublishSheet({ type: 'recette', texte: `a partagé une recette : ${meal.nom}`, apercu: meal.nom, payload: { nom: meal.nom, temps: meal.temps, tags: meal.tags || [], recette: meal.recette, ingredients: ingredients.map((c) => ({ article: c.article, quantite: c.quantite })), personnes: base, lien: meal.lien || null } }) }, icon('share')) : null,
       h('button', { type: 'button', class: 'btn-icon', 'aria-label': 'Retirer ce repas du menu', onclick: removeMeal }, icon('trash')),
     ],
   });
@@ -121,6 +123,7 @@ export function openFavoriteRecipe(recipe, { onPlan } = {}) {
       h('section', null, h('h3', { class: 'h-small' }, 'Recette'), steps.length > 1 ? h('ol', { class: 'steps' }, steps.map((s) => h('li', null, s.replace(/^\d+[.)]\s*/, '')))) : h('p', null, recipe.recette || '')),
     ],
     actions: [
+      isOn('foyer') ? h('button', { type: 'button', class: 'btn-icon', 'aria-label': 'Publier dans le fil', title: 'Publier dans le fil', onclick: () => openPublishSheet({ type: 'recette', texte: `a partagé une recette : ${recipe.nom}`, apercu: recipe.nom, payload: { nom: recipe.nom, temps: recipe.temps, tags: recipe.tags || [], recette: recipe.recette, ingredients: recipe.ingredients || [], personnes: recipe.personnes || 2, lien: recipe.lien || null } }) }, icon('share')) : null,
       h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => { dlg.close(); openCookDialog({ title: `${recipe.nom} : cuisiné`, ingredients: recipe.ingredients || [] }); } }, icon('pot'), 'Cuisiné'),
       onPlan ? h('button', { type: 'button', class: 'btn btn-primary', onclick: () => { dlg.close(); onPlan(recipe); } }, icon('plus'), 'Mettre au menu') : null,
     ],

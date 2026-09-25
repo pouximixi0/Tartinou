@@ -130,7 +130,7 @@ export function listCommunity(db, limit = 120) {
 }
 export const communityPost = (db, id) => db.prepare('SELECT * FROM community_posts WHERE id = ?').get(id) || null;
 export function createCommunityPost(db, user, { type = 'message', texte = '', payload = null }) {
-  const p = { id: newId(), user_id: user.id, foyer_id: user.foyer_id, type: ['message', 'recette', 'menu', 'liste'].includes(type) ? type : 'message', texte: String(texte || '').trim().slice(0, 1000), payload: payload ? JSON.stringify(payload) : null, at: Date.now() };
+  const p = { id: newId(), user_id: user.id, foyer_id: user.foyer_id, type: ['message', 'recette', 'menu', 'liste', 'produit'].includes(type) ? type : 'message', texte: String(texte || '').trim().slice(0, 1000), payload: payload ? JSON.stringify(payload) : null, at: Date.now() };
   if (!p.texte && !p.payload) return null;
   db.prepare('INSERT INTO community_posts (id, user_id, foyer_id, type, texte, payload, at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(p.id, p.user_id, p.foyer_id, p.type, p.texte, p.payload, p.at);
   db.exec('DELETE FROM community_posts WHERE id NOT IN (SELECT id FROM community_posts ORDER BY at DESC LIMIT 1000)');

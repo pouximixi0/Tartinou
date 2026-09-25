@@ -134,6 +134,8 @@ Deux portées, en un seul écran :
 - **Tout le monde** : un fil commun à **tous les utilisateurs du serveur**, quel que soit leur foyer. On y publie un message, une recette, un menu, une liste de courses.
 - **Mon foyer** : le mur privé du foyer, avec les petits mots épinglés et le **fil d'activité** (qui a ajouté, jeté, cuisiné, dépensé).
 
+Depuis une fiche recette, la liste de courses ou la fiche d'un produit du stock, **« Publier »** envoie l'élément dans le fil, pour tout le monde ou pour le foyer, avec un mot d'accompagnement. Un produit partagé s'ajoute au stock d'un autre foyer en un geste.
+
 Sur les deux : **réactions** (❤️ 👍 😋 😂 👏), **commentaires**, **mentions** `@prénom` qui notifient la personne, suppression par l'auteur, badge de non-lus sur l'onglet Communauté. Une recette partagée s'ajoute aux favoris ou au menu en un geste ; chaque recette a aussi une **page publique** `/p/r/<id>` importable par lien.
 
 <br clear="all">
