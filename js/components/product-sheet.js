@@ -5,7 +5,7 @@ import { h, icon, toast, todayISO, addDays, parseAmount, fmtDate, money } from '
 import { getState, update } from '../store.js';
 import { EMPLACEMENTS, CATEGORIES, UNITES, DATE_TYPES, uniteById, emplacementById, defaultDlc, defaultDdm, addStockItem, removeStockItem, adjustStockQty, addARacheter, fmtQte, prixLabel, valueOf, priceInsight, knownStores, allergenConflicts } from '../stock.js';
 import { printLabels } from '../qr.js';
-import { lookupProduct, rememberProduct } from '../off.js';
+import { lookupProduct, rememberProduct, searchProducts } from '../off.js';
 import { confirmDialog } from './dialog.js';
 import { openWasteDialog } from './waste-dialog.js';
 import { stepper } from './stepper.js';
@@ -67,6 +67,46 @@ export function openProductSheet({ code = null, product = null, item = null, def
   const marqueInput = h('input', { type: 'text', id: 'pr-marque', class: 'input', value: d.marque, placeholder: 'Marque', maxlength: '60', autocomplete: 'off', oninput: () => touched.add('marque') });
   const condInput = h('input', { type: 'text', id: 'pr-cond', class: 'input', value: d.conditionnement, placeholder: 'Ex. 4 × 125 g', maxlength: '40', autocomplete: 'off', oninput: () => touched.add('conditionnement') });
   const lookupLine = h('p', { class: 'muted small lookup-line', hidden: true });
+  // Sans code-barres : le nom tapé est cherché dans Open Food Facts, les correspondances s'affichent sous le champ.
+  const suggestBox = h('ul', { class: 'off-suggest', hidden: true, role: 'listbox', 'aria-label': 'Produits Open Food Facts' });
+  let suggestTimer = null, suggestSeq = 0;
+  function hideSuggest() { suggestBox.hidden = true; suggestBox.replaceChildren(); }
+  function scheduleSuggest() {
+    clearTimeout(suggestTimer);
+    if (d.code || !navigator.onLine) return hideSuggest();
+    const q = nomInput.value.trim();
+    if (q.length < 3) return hideSuggest();
+    suggestTimer = setTimeout(async () => {
+      const seq = ++suggestSeq;
+      const found = await searchProducts(q);
+      if (closed || seq !== suggestSeq || found === null) return;
+      if (nomInput.value.trim() !== q) return hideSuggest();
+      if (!found.length) {
+        if (!searchProducts.limited) return hideSuggest();
+        suggestBox.replaceChildren(h('li', { class: 'off-suggest-head muted small' }, 'Open Food Facts limite les recherches : réessaie dans une minute.'));
+        suggestBox.hidden = false;
+        return;
+      }
+      suggestBox.replaceChildren(
+        h('li', { class: 'off-suggest-head muted small' }, 'Sur Open Food Facts :'),
+        ...found.map((p) => h('li', { role: 'option' }, h('button', { type: 'button', class: 'off-suggest-item', onclick: () => pickSuggestion(p) },
+          p.image ? h('img', { src: p.image, alt: '', loading: 'lazy', onerror: (ev) => ev.target.replaceWith(icon('box')) }) : icon('box'),
+          h('span', { class: 'off-suggest-text' }, h('strong', null, p.nom), h('span', { class: 'muted small block' }, [p.marque, p.quantite].filter(Boolean).join(' · ') || 'marque inconnue')),
+          p.nutriscore ? h('span', { class: `score-mini score-${p.nutriscore}` }, p.nutriscore.toUpperCase()) : null))));
+      suggestBox.hidden = false;
+    }, 650);
+  }
+  function pickSuggestion(p) {
+    hideSuggest();
+    d.code = p.code; d.nom = p.nom; nomInput.value = p.nom; touched.add('nom');
+    if (p.marque) { d.marque = p.marque; marqueInput.value = p.marque; }
+    if (p.quantite && !condInput.value.trim()) { d.conditionnement = p.quantite; condInput.value = p.quantite; }
+    if (p.image) { d.image = p.image; drawThumb(); }
+    codeLine.replaceChildren(`Code-barres : ${p.code}`);
+    doLookup();
+  }
+  nomInput.addEventListener('input', scheduleSuggest);
+  nomInput.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !suggestBox.hidden) { ev.preventDefault(); hideSuggest(); } });
 
   const uniteSelect = h('select', { id: 'pr-unite', class: 'input', value: d.unite, 'aria-label': 'Unité', onchange: (ev) => { d.unite = ev.target.value; qty.setStep(uniteById(d.unite).step); } },
     UNITES.map((u) => h('option', { value: u.id }, u.label)));
@@ -300,7 +340,7 @@ export function openProductSheet({ code = null, product = null, item = null, def
     h('div', { class: 'sheet-body' },
       h('div', { class: 'product-head' }, thumb,
         h('div', { class: 'product-fields' },
-          h('div', { class: 'field' }, h('label', { for: 'pr-nom' }, 'Produit'), nomInput),
+          h('div', { class: 'field' }, h('label', { for: 'pr-nom' }, 'Produit'), nomInput, suggestBox),
           h('div', { class: 'field-row' },
             h('div', { class: 'field' }, h('label', { for: 'pr-marque' }, 'Marque'), marqueInput),
             h('div', { class: 'field' }, h('label', { for: 'pr-cond' }, 'Conditionnement'), condInput)))),

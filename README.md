@@ -115,7 +115,7 @@ Sans framework ni bundler côté client, sans dépendance npm côté serveur. No
 <img src="docs/captures/06-stock.png" width="260" align="right" alt="Écran Stock">
 
 - **Scan** : caméra (BarcodeDetector natif, ZXing en secours), photo, saisie manuelle, ou étiquettes QR maison pour les produits sans code-barres.
-- **Open Food Facts** remplit nom, marque, image, **Nutri-Score** (pastille colorée dans la liste), Eco-Score, allergènes.
+- **Open Food Facts** remplit nom, marque, image, **Nutri-Score** (pastille colorée dans la liste), Eco-Score, allergènes. Sans code-barres, taper le nom du produit propose les correspondances Open Food Facts : un tap remplit la fiche.
 - **DLC et DDM** distinguées : une DLC dépassée se jette, une DDM dépassée se goûte. Tri par urgence, filtres par emplacement.
 - **Prix par magasin** avec historique : « plus cher que la dernière fois ».
 - **Allergènes du foyer** signalés sur les produits, **portions restantes**, quantité au stepper.

@@ -41,6 +41,43 @@ export function normalizeOff(code, p) {
 }
 
 /** Interroge Open Food Facts. Résout null si le produit est inconnu ; lève en cas d'erreur réseau. */
+const SEARCH = 'https://world.openfoodfacts.org/cgi/search.pl';
+let searchCtrl = null;
+const searchCache = new Map(); // requête → produits (Open Food Facts limite la recherche à 10 appels par minute)
+/**
+ * Recherche par nom (saisie à la main) : jusqu'à 8 produits { code, nom, marque, quantite, image, nutriscore }.
+ * Retourne null si une recherche plus récente a remplacé celle-ci ; `searchProducts.limited` vaut true
+ * quand Open Food Facts a refusé l'appel (trop de recherches).
+ */
+export async function searchProducts(query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (q.length < 3) return [];
+  if (searchCache.has(q)) return searchCache.get(q);
+  if (searchCtrl) searchCtrl.abort();
+  searchCtrl = new AbortController();
+  const ctrl = searchCtrl;
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    // Les virgules de `fields` doivent rester telles quelles : Open Food Facts ne décode pas %2C.
+    const url = `${SEARCH}?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=8&lc=fr&fields=code,product_name,product_name_fr,brands,quantity,image_front_small_url,nutriscore_grade`;
+    const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl.signal });
+    searchProducts.limited = res.status === 429;
+    if (!res.ok) return [];
+    const data = await res.json();
+    const products = (data.products || [])
+      .map((p) => ({ code: String(p.code || ''), nom: (p.product_name_fr || p.product_name || '').trim(), marque: (p.brands || '').split(',')[0].trim(), quantite: (p.quantity || '').trim(), image: p.image_front_small_url || null, nutriscore: grade(p.nutriscore_grade) }))
+      .filter((p) => p.code && p.nom);
+    searchCache.set(q, products);
+    if (searchCache.size > 60) searchCache.delete(searchCache.keys().next().value);
+    return products;
+  } catch (e) {
+    if (e && e.name === 'AbortError') return null; // remplacée par une recherche plus récente
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function fetchProduct(code) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 9000);
