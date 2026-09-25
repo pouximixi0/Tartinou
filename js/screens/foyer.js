@@ -15,7 +15,7 @@ import { avatarEl } from '../avatar.js';
 import { openProductSheet } from '../components/product-sheet.js';
 import { fmtQte, emplacementById } from '../stock.js';
 
-const ui = { portee: 'tous', filtre: 'tout', openComments: new Set() };
+const ui = { portee: 'tous', filtre: 'tout', openComments: new Set(), draft: '', commentDrafts: new Map() };
 export const LAST_SEEN_KEY = 'foyer:flux-vu';
 export const markFeedSeen = () => { try { localStorage.setItem(LAST_SEEN_KEY, String(Date.now())); } catch {} };
 export const lastSeen = () => { try { return Number(localStorage.getItem(LAST_SEEN_KEY)) || 0; } catch { return 0; } };
@@ -28,18 +28,31 @@ export function renderFoyer() {
 
   const seg = h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Portée' },
     [['tous', 'Tout le monde'], ['foyer', 'Mon foyer']].map(([id, label]) => h('label', { class: 'seg' },
-      h('input', { type: 'radio', name: 'portee', value: id, checked: ui.portee === id, onchange: () => { ui.portee = id; redraw(); } }), h('span', null, label))));
-  root.append(seg);
+      h('input', { type: 'radio', name: 'portee', value: id, checked: ui.portee === id, onchange: () => { ui.portee = id; draw(); startLiveFeed(); } }), h('span', null, label))));
   const body = h('div', { class: 'feed-body' });
-  root.append(body);
+  root.append(seg, body);
 
-  let unsub = null;
-  function redraw() { if (unsub) { unsub(); unsub = null; } body.replaceChildren(...(ui.portee === 'tous' ? communityView(me, () => redraw()) : foyerView(state, me))); }
-  redraw();
-  if (ui.portee === 'tous') {
-    unsub = onCommunity(() => { if (root.isConnected) redraw(); else unsub?.(); });
+  let unsub = null, timer = null, deferred = false;
+  function stopLiveFeed() { if (unsub) { unsub(); unsub = null; } if (timer) { clearInterval(timer); timer = null; } }
+  function draw() {
+    // Quelqu'un tape un message ou un commentaire : on redessine après, pour ne pas lui couper la saisie.
+    const active = document.activeElement;
+    if (active && body.contains(active) && /^(TEXTAREA|INPUT)$/.test(active.tagName) && active.value.trim()) {
+      if (!deferred) { deferred = true; active.addEventListener('blur', () => { deferred = false; if (root.isConnected) draw(); }, { once: true }); }
+      return;
+    }
+    body.replaceChildren(...(ui.portee === 'tous' ? communityView(me, draw) : foyerView(state, me)));
+  }
+  /** Temps réel : événement SSE du serveur, plus un sondage de secours toutes les 30 s tant que l'écran est ouvert. */
+  function startLiveFeed() {
+    stopLiveFeed();
+    if (ui.portee !== 'tous') return;
+    unsub = onCommunity(() => { if (root.isConnected) draw(); else stopLiveFeed(); });
+    timer = setInterval(() => { if (!root.isConnected) return stopLiveFeed(); if (document.visibilityState === 'visible') loadCommunity().catch(() => {}); }, 30000);
     loadCommunity().catch((e) => toast(e.message || 'Communauté injoignable'));
   }
+  draw();
+  startLiveFeed();
   return root;
 }
 
@@ -95,8 +108,8 @@ function foyerView(state, me) {
 /* ---------- Composer ---------- */
 function composer(me, { onPost }) {
   const state = getState();
-  const input = h('textarea', { class: 'input', rows: '2', placeholder: 'Quoi de neuf ? (@prénom pour prévenir quelqu’un)', maxlength: '1000', 'aria-label': 'Nouvelle publication' });
-  const send = () => { const t = input.value.trim(); if (!t) return; onPost({ type: 'message', texte: t }); input.value = ''; };
+  const input = h('textarea', { class: 'input', rows: '2', placeholder: 'Quoi de neuf ? (@prénom pour prévenir quelqu’un)', maxlength: '1000', 'aria-label': 'Nouvelle publication', value: ui.draft, oninput: (ev) => { ui.draft = ev.target.value; } });
+  const send = () => { const t = input.value.trim(); if (!t) return; onPost({ type: 'message', texte: t }); input.value = ''; ui.draft = ''; };
   input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); send(); } });
   const week = currentWeek();
   return h('section', { class: 'zone zone-open composer' },
@@ -144,8 +157,8 @@ function postCard(p, me, ops) {
     avatarEl(c.auteur),
     h('div', { class: 'comment-body' }, h('span', { class: 'comment-head' }, h('strong', null, c.auteur || 'Quelqu’un'), h('span', { class: 'muted small' }, ` · ${relativeTime(c.at)}`)), richText(c.texte)),
     ops.canRemoveComment(p, c) ? h('button', { type: 'button', class: 'btn-icon btn-icon-sm', 'aria-label': 'Supprimer le commentaire', onclick: () => ops.removeComment(p, c.id) }, icon('x')) : null)));
-  const cInput = h('input', { type: 'text', class: 'input', placeholder: 'Commenter…', maxlength: '600', 'aria-label': 'Commentaire' });
-  const sendComment = () => { const t = cInput.value.trim(); if (!t) return; ops.comment(p, t); cInput.value = ''; };
+  const cInput = h('input', { type: 'text', class: 'input', placeholder: 'Commenter…', maxlength: '600', 'aria-label': 'Commentaire', value: ui.commentDrafts.get(p.id) || '', oninput: (ev) => { ui.commentDrafts.set(p.id, ev.target.value); } });
+  const sendComment = () => { const t = cInput.value.trim(); if (!t) return; ops.comment(p, t); cInput.value = ''; ui.commentDrafts.delete(p.id); };
   cInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); sendComment(); } });
   const commentBox = h('div', { class: 'comment-box', hidden: !commentsOpen }, commentList, h('div', { class: 'wall-composer' }, cInput, h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: sendComment }, 'Envoyer')));
 

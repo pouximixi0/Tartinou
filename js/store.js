@@ -309,9 +309,28 @@ function startLive() {
       pullFromServer();
     } catch {}
   });
-  source.onopen = () => { sync.live = true; emitSync(); };
+  source.onopen = () => {
+    const reconnected = liveWasOpen;
+    liveWasOpen = true;
+    sync.live = true; emitSync();
+    // Reconnexion après une coupure : des événements ont pu être manqués.
+    if (reconnected) resyncAll();
+  };
   source.onerror = () => { sync.live = false; emitSync(); };
 }
+let liveWasOpen = false;
+function resyncAll() {
+  if (!getToken()) return;
+  pullFromServer();
+  window.dispatchEvent(new CustomEvent('tartinou:community'));
+}
+// Retour au premier plan (mobile surtout) : le flux a souvent été coupé par le système.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !getToken()) return;
+  if (source && source.readyState === EventSource.CLOSED) { source = null; liveWasOpen = false; }
+  if (!source && isOn('tempsReel', state)) startLive();
+  resyncAll();
+});
 function stopLive() {
   if (source) { source.close(); source = null; }
   sync.live = false;
