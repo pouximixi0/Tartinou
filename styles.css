@@ -106,14 +106,19 @@ img { display: block; max-width: 100%; }
 }
 .tab {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  color: var(--muted); text-decoration: none; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.01em; min-height: 44px;
+  color: var(--muted); text-decoration: none; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.01em; min-height: 44px;
 }
-.tab svg { width: 23px; height: 23px; stroke-width: 1.75; }
+.tab svg { width: 24px; height: 24px; stroke-width: 1.75; }
 .tab[aria-current="page"] { color: var(--accent); }
 .tab[aria-current="page"] svg { stroke-width: 2.25; }
 .tab:focus-visible { outline-offset: -4px; }
-/* Sur mobile, la marque et l'entrée Réglages vivent ailleurs (barre du haut). */
-.tabbar-brand, .tab-settings { display: none; }
+/* Sur mobile, la marque et l'entrée Réglages vivent ailleurs (barre du haut) ;
+   Menus, Courses et Stock sont regroupés sous « Cuisine » (sous-menu en haut de l'écran). */
+.tabbar-brand, .tab-settings, .tab-desk { display: none; }
+.subnav { display: flex; margin: 12px 16px -6px; background: var(--surface-2); border-radius: var(--r); padding: 3px; gap: 2px; }
+.subnav a { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 40px; border-radius: 8px; font-weight: 600; font-size: 0.925rem; color: var(--muted); text-decoration: none; }
+.subnav a[aria-current="page"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.subnav a:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 
 /* ---------- Écrans ---------- */
 main { display: block; outline: none; }
@@ -472,6 +477,8 @@ dialog.sheet-compact::before { content: ''; display: block; width: 36px; height:
   .tab[aria-current="page"] { background: var(--paper); color: var(--ink); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
   .tab[aria-current="page"] svg { color: var(--accent); stroke-width: 2; }
   .tab-settings { display: flex; margin-top: auto; }
+  .tab-desk:not([hidden]) { display: flex; }
+  .tab-mobile, .subnav { display: none; }
   .topbar { padding: 0 32px; min-height: 64px; background: var(--paper); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .topbar-title { font-size: 1.6rem; }
   .topbar-settings { display: none; }

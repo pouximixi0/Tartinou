@@ -14,6 +14,7 @@ import { renderLogin } from './js/screens/login.js';
 import { renderFoyer, lastSeen } from './js/screens/foyer.js';
 import { unreadCount } from './js/social.js';
 import { isOn } from './js/modules.js';
+import { h } from './js/utils.js';
 
 // Un écran, une couleur d'accent : budget = moutarde, cuisine = vert.
 const ROUTES = {
@@ -22,7 +23,7 @@ const ROUTES = {
   menus: { render: renderMenus, accent: 'cuisine', title: 'Menus' },
   courses: { render: renderShopping, accent: 'cuisine', title: 'Courses' },
   stock: { render: renderStock, accent: 'cuisine', title: 'Stock' },
-  foyer: { render: renderFoyer, accent: 'budget', title: 'Foyer' },
+  communaute: { render: renderFoyer, accent: 'budget', title: 'Communauté' },
   reglages: { render: renderSettings, accent: 'budget', title: 'Réglages' },
 };
 
@@ -34,11 +35,40 @@ const settingsLink = document.getElementById('settings-link');
 const syncDot = document.getElementById('sync-dot');
 let lastRoute = null;
 
+// Sur mobile, Menus, Courses et Stock partagent l'onglet « Cuisine » ; le sous-menu
+// en haut de l'écran passe de l'un à l'autre. Sur PC, la barre latérale les liste.
+const KITCHEN = ['menus', 'courses', 'stock'];
+const MODULE_OF = { menus: 'menus', courses: 'courses', stock: 'stock', communaute: 'foyer' };
+const routeOn = (key) => !(key in MODULE_OF) || isOn(MODULE_OF[key]);
+const kitchenOn = () => KITCHEN.filter(routeOn);
+const CUISINE_KEY = 'foyer:cuisine';
+function kitchenRoute() {
+  let last = null;
+  try { last = localStorage.getItem(CUISINE_KEY); } catch {}
+  const on = kitchenOn();
+  return on.includes(last) ? last : on[0] || 'aujourdhui';
+}
+
 function currentRoute() {
-  const key = location.hash.replace(/^#\/?/, '');
-  if (!ROUTES[key]) return 'aujourdhui';
-  if (['menus', 'courses', 'stock', 'foyer'].includes(key) && !isOn(key)) return 'aujourdhui';
+  let key = location.hash.replace(/^#\/?/, '');
+  if (key === 'foyer') key = 'communaute'; // ancienne adresse de l'onglet
+  if (key === 'cuisine') key = kitchenRoute();
+  if (!ROUTES[key] || !routeOn(key)) return 'aujourdhui';
   return key;
+}
+
+function subnav(key) {
+  if (!KITCHEN.includes(key)) return null;
+  const on = kitchenOn();
+  if (on.length < 2) return null;
+  return h('nav', { class: 'subnav', 'aria-label': 'Cuisine' }, on.map((r) => h('a', { href: `#${r}`, 'aria-current': r === key ? 'page' : null }, ROUTES[r].title)));
+}
+
+function errorScreen(route, err) {
+  return h('section', { class: 'screen' }, h('div', { class: 'empty' },
+    h('p', null, `L’écran ${route.title} n’a pas pu s’afficher.`),
+    h('p', { class: 'muted small' }, String((err && err.message) || err)),
+    h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => location.reload() }, 'Recharger l’app')));
 }
 
 function applyTheme(theme) {
@@ -80,19 +110,26 @@ function render() {
   screenTitle.textContent = route.title;
   document.body.dataset.accent = route.accent;
   document.title = `${route.title} · Tartinou`;
-  main.replaceChildren(route.render());
+  const hashKey = location.hash.replace(/^#\/?/, '');
+  if (hashKey !== key) history.replaceState(null, '', `#${key}`);
+  let content;
+  try { content = route.render(); }
+  catch (err) { console.error(`Écran ${key}`, err); content = errorScreen(route, err); }
+  if (KITCHEN.includes(key)) { try { localStorage.setItem(CUISINE_KEY, key); } catch {} }
+  main.replaceChildren(...[subnav(key), content].filter(Boolean));
   let visible = 0;
   for (const tab of tabbar.querySelectorAll('.tab')) {
     const r = tab.dataset.route;
-    const off = ['menus', 'courses', 'stock', 'foyer'].includes(r) && !isOn(r);
+    const off = r === 'cuisine' ? !kitchenOn().length : !routeOn(r);
     tab.hidden = off;
-    if (!off && !tab.classList.contains('tab-settings')) visible++;
-    if (r === key) tab.setAttribute('aria-current', 'page');
+    if (!off && !tab.classList.contains('tab-settings') && !tab.classList.contains('tab-desk')) visible++;
+    const current = r === key || (r === 'cuisine' && KITCHEN.includes(key));
+    if (current) tab.setAttribute('aria-current', 'page');
     else tab.removeAttribute('aria-current');
   }
   tabbar.style.setProperty('--tabs', String(visible));
   const badge = tabbar.querySelector('.tab-badge');
-  if (badge) { const n = key === 'foyer' ? 0 : unreadCount(state.posts, lastSeen(), syncStatus().user?.nom); badge.textContent = n ? String(n) : ''; badge.hidden = !n; }
+  if (badge) { const n = key === 'communaute' ? 0 : unreadCount(state.posts, lastSeen(), syncStatus().user?.nom); badge.textContent = n ? String(n) : ''; badge.hidden = !n; }
   settingsLink.setAttribute('aria-current', key === 'reglages' ? 'page' : 'false');
   // Même écran re-rendu après une action : on garde la position de défilement.
   window.scrollTo(0, key === lastRoute ? y : 0);

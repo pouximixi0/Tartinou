@@ -266,7 +266,7 @@ async function handleApi(req, res, url) {
     const p = A.createCommunityPost(accounts, user, b);
     if (!p) return fail(res, 400, 'Publication vide.');
     emitAll({ written: ['community'], at: Date.now(), by: user.nom, client: String(req.headers['x-client-id'] || '') });
-    for (const m of A.usersMentioned(accounts, p.texte)) if (m.id !== user.id) notifyUser(m, { title: `${user.nom} t’a mentionné`, body: p.texte.slice(0, 140), url: '#foyer', tag: `cm-${p.id}` });
+    for (const m of A.usersMentioned(accounts, p.texte)) if (m.id !== user.id) notifyUser(m, { title: `${user.nom} t’a mentionné`, body: p.texte.slice(0, 140), url: '#communaute', tag: `cm-${p.id}` });
     return send(res, 201, { ok: true, id: p.id });
   }
   const cm = url.pathname.match(/^\/api\/community\/([A-Za-z0-9_-]+)(?:\/(react|comment)(?:\/([A-Za-z0-9_-]+))?)?$/);
@@ -281,7 +281,7 @@ async function handleApi(req, res, url) {
       const r = A.toggleCommunityReaction(accounts, id, emo, user.id);
       if (!r) return fail(res, 404, 'Publication introuvable.');
       bump();
-      if (r.added && r.post.user_id !== user.id) { const owner = A.userById(accounts, r.post.user_id); if (owner) notifyUser(owner, { title: `${user.nom} a réagi ${emo}`, body: r.post.texte.slice(0, 100), url: '#foyer', tag: `cr-${id}` }); }
+      if (r.added && r.post.user_id !== user.id) { const owner = A.userById(accounts, r.post.user_id); if (owner) notifyUser(owner, { title: `${user.nom} a réagi ${emo}`, body: r.post.texte.slice(0, 100), url: '#communaute', tag: `cr-${id}` }); }
       return send(res, 200, { ok: true });
     }
     if (req.method === 'POST' && action === 'comment') {
@@ -291,7 +291,7 @@ async function handleApi(req, res, url) {
       bump();
       const targets = new Set([r.post.user_id, ...r.participants, ...A.usersMentioned(accounts, r.comment.texte).map((m) => m.id)]);
       targets.delete(user.id);
-      for (const uid of targets) { const u = A.userById(accounts, uid); if (u) notifyUser(u, { title: `${user.nom} a commenté`, body: r.comment.texte.slice(0, 140), url: '#foyer', tag: `cc-${id}` }); }
+      for (const uid of targets) { const u = A.userById(accounts, uid); if (u) notifyUser(u, { title: `${user.nom} a commenté`, body: r.comment.texte.slice(0, 140), url: '#communaute', tag: `cc-${id}` }); }
       return send(res, 201, { ok: true, id: r.comment.id });
     }
     if (req.method === 'DELETE' && action === 'comment' && sub) { if (!A.deleteCommunityComment(accounts, id, sub, user)) return fail(res, 403, 'Commentaire introuvable ou pas à toi.'); bump(); return send(res, 200, { ok: true }); }
@@ -401,7 +401,7 @@ function feedNotifications(db, foyer, user, posts, before) {
       const men = mentioned(p.texte);
       for (const s of to(null)) {
         const isMention = men.includes(s.member);
-        notifyMembers([s], { title: isMention ? `${user.nom} t’a mentionné` : `${user.nom} ${TYPE_LABEL[p.type] || 'a publié'}`, body, url: '#foyer', tag: `post-${p.id}` });
+        notifyMembers([s], { title: isMention ? `${user.nom} t’a mentionné` : `${user.nom} ${TYPE_LABEL[p.type] || 'a publié'}`, body, url: '#communaute', tag: `post-${p.id}` });
       }
       sent++;
       continue;
@@ -410,14 +410,14 @@ function feedNotifications(db, foyer, user, posts, before) {
     for (const c of p.commentaires || []) {
       if (!c || old.commentaires.has(c.id) || c.auteur !== user.nom) continue;
       const others = new Set([old.auteur, ...(p.commentaires || []).map((x) => x.auteur), ...mentioned(c.texte)].filter((n) => n && n !== user.nom));
-      notifyMembers(to([...others]), { title: `${user.nom} a commenté`, body: String(c.texte).slice(0, 140), url: '#foyer', tag: `comm-${p.id}` });
+      notifyMembers(to([...others]), { title: `${user.nom} a commenté`, body: String(c.texte).slice(0, 140), url: '#communaute', tag: `comm-${p.id}` });
       sent++;
     }
     // Nouvelle réaction de cette personne : on prévient l'auteur de la publication.
     for (const [emo, names] of Object.entries(p.reactions || {})) {
       const was = old.reactions[emo] || new Set();
       if (names.includes(user.nom) && !was.has(user.nom) && old.auteur && old.auteur !== user.nom) {
-        notifyMembers(to([old.auteur]), { title: `${user.nom} a réagi ${emo}`, body: String(p.texte).slice(0, 100), url: '#foyer', tag: `react-${p.id}` });
+        notifyMembers(to([old.auteur]), { title: `${user.nom} a réagi ${emo}`, body: String(p.texte).slice(0, 100), url: '#communaute', tag: `react-${p.id}` });
         sent++;
       }
     }

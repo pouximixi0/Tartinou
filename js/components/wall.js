@@ -18,7 +18,7 @@ export function wallZone(state) {
   };
   input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); send(); } });
   return h('section', { class: 'zone zone-open wall' },
-    h('h2', { class: 'zone-title' }, 'Foyer', h('span', { class: 'zone-tools' }, h('a', { class: 'link small', href: '#foyer' }, 'Voir le flux'))),
+    h('h2', { class: 'zone-title' }, 'Mon foyer', h('span', { class: 'zone-tools' }, h('a', { class: 'link small', href: '#communaute' }, 'Voir le flux'))),
     h('div', { class: 'zone-body' },
       posts.length
         ? h('ul', { class: 'wall-list' }, posts.map((p) => h('li', { class: `wall-msg${p.epingle ? ' is-pinned' : ''}` },

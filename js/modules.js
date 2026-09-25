@@ -7,7 +7,7 @@ export const MODULE_GROUPS = [
     ['menus', 'Menus', 'Onglet Menus : prompt, import, semaine, favoris.'],
     ['courses', 'Courses', 'Onglet Courses : liste, ticket, rangement.'],
     ['stock', 'Stock', 'Onglet Stock : produits, dates limites, anti-gaspi.'],
-    ['foyer', 'Foyer', 'Onglet Foyer : flux communauté et foyer, réactions, commentaires.'],
+    ['foyer', 'Communauté', 'Onglet Communauté : fil commun à tout le serveur, mur du foyer, réactions, commentaires.'],
   ] },
   { titre: 'Aujourd’hui', items: [
     ['miniJauges', 'Jauges semaine et mois', ''],

@@ -45,7 +45,7 @@ Tartinou réunit dans une seule application installable sur le téléphone (et c
 | **Menus** | Un prompt prêt à coller dans Claude, qui tient compte du stock et de ce qui périme ; le menu revient en JSON et s'importe en un geste. Chaque recette a un lien en ligne. |
 | **Courses** | Liste par rayon, générée depuis le menu, validée avec le ticket, rangée dans le stock. |
 | **Stock** | Scan des codes-barres, fiche Open Food Facts (Nutri-Score, allergènes), DLC et DDM, prix par magasin, anti-gaspi en euros. |
-| **Foyer** | Un fil commun à tous les utilisateurs du serveur et un mur privé par foyer : messages, recettes, menus, listes partagés, réactions, commentaires, mentions. |
+| **Communauté** | Un fil commun à tous les utilisateurs du serveur et un mur privé par foyer : messages, recettes, menus, listes partagés, réactions, commentaires, mentions. |
 | **Comptes** | Inscription, connexion, foyers avec code d'invitation, photo de profil, une base SQLite par foyer. |
 
 Sans framework ni bundler côté client, sans dépendance npm côté serveur. Node ≥ 22.13 suffit.
@@ -125,16 +125,16 @@ Sans framework ni bundler côté client, sans dépendance npm côté serveur. No
 
 <br clear="all">
 
-### Foyer
+### Communauté
 
-<img src="docs/captures/07-foyer.png" width="260" align="right" alt="Écran Foyer">
+<img src="docs/captures/07-foyer.png" width="260" align="right" alt="Écran Communauté">
 
 Deux portées, en un seul écran :
 
 - **Tout le monde** : un fil commun à **tous les utilisateurs du serveur**, quel que soit leur foyer. On y publie un message, une recette, un menu, une liste de courses.
 - **Mon foyer** : le mur privé du foyer, avec les petits mots épinglés et le **fil d'activité** (qui a ajouté, jeté, cuisiné, dépensé).
 
-Sur les deux : **réactions** (❤️ 👍 😋 😂 👏), **commentaires**, **mentions** `@prénom` qui notifient la personne, suppression par l'auteur, badge de non-lus sur l'onglet. Une recette partagée s'ajoute aux favoris ou au menu en un geste ; chaque recette a aussi une **page publique** `/p/r/<id>` importable par lien.
+Sur les deux : **réactions** (❤️ 👍 😋 😂 👏), **commentaires**, **mentions** `@prénom` qui notifient la personne, suppression par l'auteur, badge de non-lus sur l'onglet Communauté. Une recette partagée s'ajoute aux favoris ou au menu en un geste ; chaque recette a aussi une **page publique** `/p/r/<id>` importable par lien.
 
 <br clear="all">
 
@@ -189,7 +189,7 @@ Chaque appareil s'abonne séparément et choisit ses contenus.
 
 ## Tout se règle
 
-Dans **Réglages → Fonctions et affichage**, chaque module a son interrupteur et les onglets inutiles disparaissent : dépenses, menus, courses, stock, foyer, fil communauté, mur, fil d'activité, partages, prompt et liens de recettes, Nutri-Score, prix et historique, allergènes, portions, étiquettes QR, mode rangement, anti-gaspi, notifications, import CSV, récurrences, objectifs…
+Dans **Réglages → Fonctions et affichage**, chaque module a son interrupteur et les onglets inutiles disparaissent : menus, courses, stock, communauté, mur, fil d'activité, partages, prompt et liens de recettes, Nutri-Score, prix et historique, allergènes, portions, étiquettes QR, mode rangement, anti-gaspi, notifications, import CSV, récurrences, objectifs…
 
 ---
 
@@ -314,7 +314,7 @@ docs/
 
 ## Design
 
-Une seule feuille de style. Police système, fond papier et encre, un accent par domaine (budget ocre, cuisine vert), chiffres tabulaires, listes groupées à filets fins, feuilles basses pour la saisie. Thème clair et sombre suivent le système ou se forcent dans les réglages. Barre d'onglets sur mobile, barre latérale sur PC.
+Une seule feuille de style. Police système, fond papier et encre, un accent par domaine (budget ocre, cuisine vert), chiffres tabulaires, listes groupées à filets fins, feuilles basses pour la saisie. Thème clair et sombre suivent le système ou se forcent dans les réglages. Sur mobile, quatre onglets (Aujourd'hui, Dépenses, Cuisine, Communauté) ; Menus, Courses et Stock se choisissent en haut de l'écran Cuisine. Sur PC, la barre latérale les liste tous.
 
 ## Sauvegarde et données
 
