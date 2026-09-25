@@ -2,7 +2,7 @@
 // ZXing et images Open Food Facts mis en cache à la première visite ; l'API
 // (/api/) et Open Food Facts ne passent jamais par le cache.
 // Incrémente VERSION à chaque déploiement.
-const VERSION = 'foyer-v2.10.0';
+const VERSION = 'foyer-v2.10.1';
 const RUNTIME = 'foyer-runtime';
 const ASSETS = [
   './',
@@ -51,6 +51,7 @@ const ASSETS = [
   './js/screens/onboarding.js',
   './js/screens/login.js',
   './js/screens/foyer.js',
+  './js/version.js',
   './js/components/publish-sheet.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -59,9 +60,14 @@ const ASSETS = [
 ];
 const RUNTIME_HOSTS = ['cdn.jsdelivr.net', 'images.openfoodfacts.org', 'static.openfoodfacts.org'];
 
+// À l'installation d'une nouvelle version, chaque fichier est demandé au réseau en ignorant
+// le cache HTTP du navigateur : sinon une nouvelle version pouvait embarquer d'anciens fichiers.
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(VERSION).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(VERSION).then((cache) => Promise.all(ASSETS.map((url) =>
+    fetch(url, { cache: 'reload' }).then((res) => { if (!res.ok) throw new Error(`${url} : ${res.status}`); return cache.put(url, res); }),
+  ))).then(() => self.skipWaiting()));
 });
+self.addEventListener('message', (event) => { if (event.data === 'skipWaiting') self.skipWaiting(); });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(

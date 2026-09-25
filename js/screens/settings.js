@@ -10,6 +10,7 @@ import { detectRecurring, parseBankCsv, matchBankRows, guessCategoryId } from '.
 import { pushSupported, isStandaloneIOS, currentSubscription, subscribeDevice, unsubscribeDevice } from '../push.js';
 import { shareText, inviteUrl } from '../share.js';
 import { MODULE_GROUPS, isOn } from '../modules.js';
+import { APP_VERSION } from '../version.js';
 import { avatarEl, fileToAvatar, uploadAvatar, removeAvatar } from '../avatar.js';
 
 export const ALLERGENES = ['lait', 'gluten', 'œufs', 'fruits à coque', 'arachides', 'soja', 'poisson', 'crustacés', 'mollusques', 'céleri', 'moutarde', 'sésame', 'sulfites', 'lupin'];
@@ -222,9 +223,26 @@ export function renderSettings() {
     installBtn,
     !isStandalone() && isIOS() ? h('p', { class: 'muted small' }, 'Sur iPhone : bouton Partager, puis « Sur l’écran d’accueil ».') : null,
     !isStandalone() && !isIOS() && !canInstall() ? h('p', { class: 'muted small', id: 'install-hint' }, 'Le bouton d’installation apparaît quand le navigateur le propose (Chrome, Edge). Sinon : menu du navigateur, « Installer l’application ».') : null,
-    h('p', { class: 'muted small' }, 'Tartinou v2.3 · base de données par foyer sur le serveur, copie locale sous la clé foyer:v2.'),
+    h('p', { class: 'muted small' }, `Tartinou v${APP_VERSION} · base de données par foyer sur le serveur, copie locale sur cet appareil.`),
+    h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: checkForUpdate }, icon('refresh'), 'Rechercher une mise à jour'),
   ));
   return root;
+}
+
+/** Force la vérification du service worker ; s'il y a une nouvelle version, l'app se recharge. */
+async function checkForUpdate() {
+  if (!('serviceWorker' in navigator)) return toast('Pas de service worker dans ce navigateur.');
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return toast('Application non installée en cache : recharge simplement la page.');
+    toast('Vérification…');
+    await reg.update();
+    const w = reg.installing || reg.waiting;
+    if (!w) return toast(`Tu as déjà la dernière version (v${APP_VERSION}).`);
+    w.addEventListener('statechange', () => { if (w.state === 'installed' && reg.waiting) reg.waiting.postMessage('skipWaiting'); });
+    if (reg.waiting) reg.waiting.postMessage('skipWaiting');
+    toast('Nouvelle version : l’app se recharge…');
+  } catch (e) { toast(e.message || 'Vérification impossible'); }
 }
 
 /* ---------- Notifications ---------- */
