@@ -7,13 +7,14 @@ export const MODULE_GROUPS = [
     ['menus', 'Menus', 'Onglet Menus : prompt, import, semaine, favoris.'],
     ['courses', 'Courses', 'Onglet Courses : liste, ticket, rangement.'],
     ['stock', 'Stock', 'Onglet Stock : produits, dates limites, anti-gaspi.'],
+    ['foyer', 'Foyer', 'Onglet Foyer : flux communauté et foyer, réactions, commentaires.'],
   ] },
   { titre: 'Aujourd’hui', items: [
     ['miniJauges', 'Jauges semaine et mois', ''],
     ['alerteStock', 'Alerte stock', 'Produits périmés ou à consommer vite.'],
     ['alerteObjectifs', 'Alerte objectifs', 'Catégories à 80 % ou au-delà.'],
-    ['mur', 'Mur du foyer', 'Petits mots entre membres.'],
-    ['activite', 'Fil d’activité', 'Qui a fait quoi.'],
+    ['mur', 'Aperçu du flux', 'Dernières publications du foyer sur Aujourd’hui.'],
+    ['activite', 'Activité automatique', 'Dépenses, stock et plats cuisinés dans le flux.'],
     ['serie', 'Série de jours sous le budget', ''],
   ] },
   { titre: 'Dépenses', items: [

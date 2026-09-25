@@ -81,7 +81,7 @@ export function renderToday() {
     );
   }
 
-  if (isOn('mur')) root.append(wallZone(state));
+  if (isOn('mur') && isOn('foyer')) root.append(wallZone(state));
 
   if (b.configured && isOn('serie')) {
     root.append(h('p', { class: 'streak muted small' },

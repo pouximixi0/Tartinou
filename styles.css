@@ -567,3 +567,58 @@ dialog.sheet-compact::before { content: ''; display: block; width: 36px; height:
 
 .module-group { display: flex; flex-direction: column; gap: 2px; padding-top: 6px; border-top: 1px solid var(--line); }
 .module-group .label { margin: 6px 0 2px; }
+
+/* ---------- Flux du foyer ---------- */
+.tab { position: relative; }
+.tab-badge { position: absolute; top: 6px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--danger); color: #fff; font-size: 0.65rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft); color: var(--ink); font-weight: 700; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.avatar-sm { width: 22px; height: 22px; font-size: 0.65rem; }
+.composer .zone-body { gap: 10px; }
+.composer-row { display: flex; gap: 10px; align-items: flex-start; }
+.composer-row .input { flex: 1; }
+.composer-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.feed-list { display: flex; flex-direction: column; gap: 10px; }
+.post { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.post.is-pinned { border-color: var(--accent); }
+.post-head { display: flex; align-items: center; gap: 10px; }
+.post-meta { flex: 1; min-width: 0; }
+.post-tools { display: flex; gap: 2px; }
+.btn-icon-sm { width: 34px; height: 34px; color: var(--muted); }
+.btn-icon-sm[aria-pressed="true"] { color: var(--accent); }
+.post-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.mention { color: var(--accent); font-weight: 600; }
+.post-attach summary { cursor: pointer; font-weight: 600; }
+.post-pre { white-space: pre-wrap; font: inherit; font-size: 0.9rem; background: var(--surface-2); border-radius: var(--r); padding: 10px 12px; margin: 8px 0 0; overflow-wrap: anywhere; }
+.post-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.reactions { display: flex; gap: 4px; flex-wrap: wrap; }
+.reaction { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 0 9px; border-radius: 999px; border: 1px solid transparent; background: transparent; font-size: 1rem; color: var(--ink); }
+.reaction.has-count { background: var(--surface-2); }
+.reaction.is-active { border-color: var(--accent); background: var(--accent-soft); }
+.reaction .num { font-size: 0.8rem; }
+.comment-box { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.comments { display: flex; flex-direction: column; gap: 8px; }
+.comment { display: flex; gap: 8px; align-items: flex-start; }
+.comment .avatar { width: 26px; height: 26px; font-size: 0.65rem; }
+.comment-body { flex: 1; min-width: 0; background: var(--surface-2); border-radius: 12px; padding: 6px 10px; }
+.comment-body .post-text { font-size: 0.95rem; }
+.recipe-card { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.recipe-card-main { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface-2); border: 0; text-align: left; color: inherit; }
+.recipe-card-text { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.recipe-card .row-actions { padding: 8px 10px; }
+.feed-act { display: flex; align-items: center; gap: 10px; padding: 6px 14px; color: var(--muted); font-size: 0.9rem; }
+.feed-act .icon { width: 16px; height: 16px; }
+.feed-act.is-bad .icon { color: var(--danger); }
+.feed-act .feed-text { flex: 1; }
+.feed-act strong { color: var(--ink); font-weight: 600; }
+.wall-head .avatar { margin-right: 2px; }
+@media (min-width: 900px) { .screen-foyer { max-width: 720px; } }
+
+.meal-link { display: inline-flex; margin-left: 6px; color: var(--cuisine); vertical-align: middle; }
+.meal-link .icon { width: 14px; height: 14px; }
+
+.avatar-img { object-fit: cover; }
+.avatar-lg { width: 64px; height: 64px; font-size: 1.2rem; }
+.profile-row { display: flex; gap: 14px; align-items: center; }
+.profile-row > div { display: flex; flex-direction: column; gap: 8px; }
+
+.feed-body { display: flex; flex-direction: column; gap: 16px; }

@@ -11,6 +11,8 @@ import { renderStock } from './js/screens/stock.js';
 import { renderSettings } from './js/screens/settings.js';
 import { renderOnboarding } from './js/screens/onboarding.js';
 import { renderLogin } from './js/screens/login.js';
+import { renderFoyer, lastSeen } from './js/screens/foyer.js';
+import { unreadCount } from './js/social.js';
 import { isOn } from './js/modules.js';
 
 // Un écran, une couleur d'accent : budget = moutarde, cuisine = vert.
@@ -20,6 +22,7 @@ const ROUTES = {
   menus: { render: renderMenus, accent: 'cuisine', title: 'Menus' },
   courses: { render: renderShopping, accent: 'cuisine', title: 'Courses' },
   stock: { render: renderStock, accent: 'cuisine', title: 'Stock' },
+  foyer: { render: renderFoyer, accent: 'budget', title: 'Foyer' },
   reglages: { render: renderSettings, accent: 'budget', title: 'Réglages' },
 };
 
@@ -34,7 +37,7 @@ let lastRoute = null;
 function currentRoute() {
   const key = location.hash.replace(/^#\/?/, '');
   if (!ROUTES[key]) return 'aujourdhui';
-  if (['menus', 'courses', 'stock'].includes(key) && !isOn(key)) return 'aujourdhui';
+  if (['menus', 'courses', 'stock', 'foyer'].includes(key) && !isOn(key)) return 'aujourdhui';
   return key;
 }
 
@@ -81,13 +84,15 @@ function render() {
   let visible = 0;
   for (const tab of tabbar.querySelectorAll('.tab')) {
     const r = tab.dataset.route;
-    const off = ['menus', 'courses', 'stock'].includes(r) && !isOn(r);
+    const off = ['menus', 'courses', 'stock', 'foyer'].includes(r) && !isOn(r);
     tab.hidden = off;
     if (!off && !tab.classList.contains('tab-settings')) visible++;
     if (r === key) tab.setAttribute('aria-current', 'page');
     else tab.removeAttribute('aria-current');
   }
   tabbar.style.setProperty('--tabs', String(visible));
+  const badge = tabbar.querySelector('.tab-badge');
+  if (badge) { const n = key === 'foyer' ? 0 : unreadCount(state.posts, lastSeen(), syncStatus().user?.nom); badge.textContent = n ? String(n) : ''; badge.hidden = !n; }
   settingsLink.setAttribute('aria-current', key === 'reglages' ? 'page' : 'false');
   // Même écran re-rendu après une action : on garde la position de défilement.
   window.scrollTo(0, key === lastRoute ? y : 0);

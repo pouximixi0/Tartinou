@@ -2,18 +2,21 @@
 // nombre de convives), étapes, « J'ai cuisiné ce plat », favoris.
 import { h, icon, capitalize, money, toast, todayISO, uid } from '../utils.js';
 import { getState, update } from '../store.js';
-import { openDialog } from './dialog.js';
+import { openDialog, confirmDialog } from './dialog.js';
 import { openCookDialog } from './cook-dialog.js';
 import { stepper } from './stepper.js';
 import { isOn } from '../modules.js';
+import { searchLinkFor } from '../menu-schema.js';
 
 export const mealLabel = (jour, moment) => `${capitalize(jour)} ${moment}`;
 
 /** Lien vers la recette d'origine (Marmiton, 750g…), ouvert dans un nouvel onglet. */
-export function sourceLink(url) {
+export function sourceLink(url, nom = '') {
+  const href = url || searchLinkFor(nom);
   let host = '';
-  try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
-  return h('a', { class: 'source-link', href: url, target: '_blank', rel: 'noopener noreferrer' }, icon('link'), `Voir la recette sur ${host}`);
+  try { host = new URL(href).hostname.replace(/^www\./, ''); } catch { return null; }
+  const search = !url || /recherche\.aspx|\/search|[?&]q=/.test(href);
+  return h('a', { class: 'source-link', href, target: '_blank', rel: 'noopener noreferrer' }, icon('link'), search ? `Chercher la recette sur ${host}` : `Voir la recette sur ${host}`);
 }
 
 export function findMeal(menu, jour, moment) {
@@ -58,6 +61,20 @@ export function openRecipe(week, jour, moment) {
       update((s) => { const w = s.menus.weeks.find((x) => x.id === week.id); if (w) { w.cooked = w.cooked || {}; w.cooked[ref] = todayISO(); } });
     } });
   }
+  async function removeMeal() {
+    const ok = await confirmDialog({ title: `Retirer « ${meal.nom} » du menu ?`, message: 'Le repas disparaît de la semaine ; ses ingrédients qui ne servent à aucun autre repas quittent la liste de courses.', confirmLabel: 'Retirer', danger: true });
+    if (!ok) return;
+    update((s) => {
+      const w = s.menus.weeks.find((x) => x.id === week.id);
+      if (!w) return;
+      const day = w.menu.jours.find((d) => d.jour === jour);
+      if (day) day[moment] = null;
+      w.menu.courses = w.menu.courses.map((c) => ({ ...c, pour: c.pour.filter((p) => p !== ref) })).filter((c) => c.pour.length);
+      if (w.cooked) delete w.cooked[ref];
+    });
+    toast('Repas retiré du menu');
+    dlg.close();
+  }
   function favorite() {
     if (isFav) { toast('Déjà dans tes recettes favorites'); return; }
     update((s) => { s.recettes.push({ id: uid(), nom: meal.nom, temps: meal.temps, tags: [...meal.tags], recette: meal.recette, lien: meal.lien || null, ingredients: ingredients.map((c) => ({ article: c.article, quantite: c.quantite, rayon: c.rayon, prix_estime: c.prix_estime })), personnes: base, ajouteLe: todayISO() }); });
@@ -70,7 +87,7 @@ export function openRecipe(week, jour, moment) {
     cls: 'sheet-compact',
     content: [
       h('p', { class: 'muted' }, `${mealLabel(jour, moment)} · ${meal.temps} min${tags}`, cooked ? h('span', { class: 'tag-stock' }, 'cuisiné') : null),
-      meal.lien && isOn('liensRecettes') ? sourceLink(meal.lien) : null,
+      isOn('liensRecettes') ? sourceLink(meal.lien, meal.nom) : null,
       ingredients.length
         ? h('section', null,
             h('div', { class: 'recipe-head' }, h('h3', { class: 'h-small' }, 'Ingrédients'), pers),
@@ -86,6 +103,7 @@ export function openRecipe(week, jour, moment) {
     actions: [
       isOn('favoris') ? h('button', { type: 'button', class: 'btn btn-secondary', onclick: favorite, disabled: isFav }, icon('check'), isFav ? 'Favori' : 'Favoris') : null,
       isOn('cuisine') ? h('button', { type: 'button', class: 'btn btn-primary', onclick: cook }, icon('pot'), cooked ? 'Cuisiné à nouveau' : 'J’ai cuisiné ce plat') : null,
+      h('button', { type: 'button', class: 'btn-icon', 'aria-label': 'Retirer ce repas du menu', onclick: removeMeal }, icon('trash')),
     ],
   });
 }
@@ -98,7 +116,7 @@ export function openFavoriteRecipe(recipe, { onPlan } = {}) {
     cls: 'sheet-compact',
     content: [
       h('p', { class: 'muted' }, `${recipe.temps || '?'} min${recipe.tags?.length ? ` · ${recipe.tags.join(', ')}` : ''} · ${recipe.personnes || 2} pers.`),
-      recipe.lien && isOn('liensRecettes') ? sourceLink(recipe.lien) : null,
+      isOn('liensRecettes') ? sourceLink(recipe.lien, recipe.nom) : null,
       recipe.ingredients?.length ? h('section', null, h('h3', { class: 'h-small' }, 'Ingrédients'), h('ul', { class: 'plain-list' }, recipe.ingredients.map((c) => h('li', null, `${c.article}${c.quantite ? ` · ${c.quantite}` : ''}`)))) : null,
       h('section', null, h('h3', { class: 'h-small' }, 'Recette'), steps.length > 1 ? h('ol', { class: 'steps' }, steps.map((s) => h('li', null, s.replace(/^\d+[.)]\s*/, '')))) : h('p', null, recipe.recette || '')),
     ],

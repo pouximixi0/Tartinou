@@ -80,6 +80,10 @@ CREATE TABLE IF NOT EXISTS push_log (key TEXT PRIMARY KEY, sent_at INTEGER);
 CREATE TABLE IF NOT EXISTS messages (
   id TEXT PRIMARY KEY, auteur TEXT, texte TEXT NOT NULL, date TEXT NOT NULL, at INTEGER, epingle INTEGER NOT NULL DEFAULT 0, position INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS posts (
+  id TEXT PRIMARY KEY, type TEXT NOT NULL DEFAULT 'message', auteur TEXT, texte TEXT NOT NULL DEFAULT '', payload TEXT, date TEXT NOT NULL, at INTEGER,
+  epingle INTEGER NOT NULL DEFAULT 0, reactions TEXT NOT NULL DEFAULT '{}', commentaires TEXT NOT NULL DEFAULT '[]', position INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS push_config (id INTEGER PRIMARY KEY CHECK (id = 1), public_key TEXT, private_key TEXT, subject TEXT);
 `;
 
@@ -102,6 +106,9 @@ const COLUMNS = [
   ['recipes', 'lien', 'TEXT'],
   ['stock_journal', 'auteur', 'TEXT'],
   ['settings', 'modules', "TEXT NOT NULL DEFAULT '{}'"],
+  ['prompt_form', 'objectif', "TEXT NOT NULL DEFAULT 'equilibre'"],
+  ['prompt_form', 'niveau', "TEXT NOT NULL DEFAULT 'confirme'"],
+  ['prompt_form', 'equipement', "TEXT NOT NULL DEFAULT ''"],
 ];
 
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -172,9 +179,10 @@ export function readState(db) {
         checked: parse(w.checked, {}), unavailable: parse(w.unavailable, {}), manualItems: byWeek.get(w.id) || [], validation: parse(w.validation, null), rangeAt: w.range_at, cooked: parse(w.cooked, {}),
       })).filter((w) => w.menu),
     },
-    promptForm: { personnes: pf.personnes, budget: pf.budget, regime: pf.regime, allergies: pf.allergies, tempsMax: pf.temps_max, placards: pf.placards, repas: pf.repas, restesDabord: !!pf.restes_dabord },
+    promptForm: { personnes: pf.personnes, budget: pf.budget, regime: pf.regime, allergies: pf.allergies, tempsMax: pf.temps_max, placards: pf.placards, repas: pf.repas, restesDabord: !!pf.restes_dabord, objectif: pf.objectif || 'equilibre', niveau: pf.niveau || 'confirme', equipement: pf.equipement || '' },
     recettes: db.prepare('SELECT * FROM recipes ORDER BY position, rowid').all().map((r) => ({ id: r.id, nom: r.nom, temps: r.temps, tags: parse(r.tags, []), recette: r.recette || '', ingredients: parse(r.ingredients, []), personnes: r.personnes, ajouteLe: r.ajoute_le, partage: r.share_id, lien: r.lien })),
     messages: db.prepare('SELECT * FROM messages ORDER BY position, rowid').all().map((m) => ({ id: m.id, auteur: m.auteur, texte: m.texte, date: m.date, at: m.at, epingle: !!m.epingle })),
+    posts: readPosts(db),
     stock: {
       items: db.prepare('SELECT * FROM stock_items ORDER BY position, rowid').all().map((i) => ({
         id: i.id, code: i.code, nom: i.nom, marque: i.marque, conditionnement: i.conditionnement, qte: i.qte, unite: i.unite, emplacement: i.emplacement, categorie: i.categorie,
@@ -232,14 +240,20 @@ const writers = {
   },
   promptForm(db, f) {
     if (!f || typeof f !== 'object') throw new Error('promptForm invalide');
-    db.prepare('UPDATE prompt_form SET personnes=?, budget=?, regime=?, allergies=?, temps_max=?, placards=?, repas=?, restes_dabord=? WHERE id = 1')
-      .run(Math.max(1, int(f.personnes, 2)), str(f.budget), str(f.regime), str(f.allergies), Math.max(5, int(f.tempsMax, 30)), str(f.placards), str(f.repas, 'midi-soir-7'), bool(f.restesDabord));
+    db.prepare('UPDATE prompt_form SET personnes=?, budget=?, regime=?, allergies=?, temps_max=?, placards=?, repas=?, restes_dabord=?, objectif=?, niveau=?, equipement=? WHERE id = 1')
+      .run(Math.max(1, int(f.personnes, 2)), str(f.budget), str(f.regime), str(f.allergies), Math.max(5, int(f.tempsMax, 30)), str(f.placards), str(f.repas, 'midi-soir-7'), bool(f.restesDabord), str(f.objectif, 'equilibre'), str(f.niveau, 'confirme'), str(f.equipement));
   },
   recettes(db, list) {
     if (!Array.isArray(list)) throw new Error('recettes invalide');
     db.exec('DELETE FROM recipes');
     const ins = db.prepare('INSERT INTO recipes (id, nom, temps, tags, recette, ingredients, personnes, ajoute_le, share_id, lien, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     list.forEach((r, i) => ins.run(str(r.id), str(r.nom, 'Recette'), int(r.temps, 0), json(r.tags, []), str(r.recette), json(r.ingredients, []), Math.max(1, int(r.personnes, 2)), nullable(str(r.ajouteLe)), nullable(str(r.partage)), nullable(str(r.lien)), i));
+  },
+  posts(db, list) {
+    if (!Array.isArray(list)) throw new Error('posts invalide');
+    db.exec('DELETE FROM posts');
+    const ins = db.prepare('INSERT INTO posts (id, type, auteur, texte, payload, date, at, epingle, reactions, commentaires, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    list.forEach((p, i) => ins.run(str(p.id), str(p.type, 'message'), nullable(str(p.auteur)), str(p.texte).slice(0, 1000), p.payload ? json(p.payload) : null, str(p.date), int(p.at, 0), bool(p.epingle), json(p.reactions, {}), json(p.commentaires, []), i));
   },
   messages(db, list) {
     if (!Array.isArray(list)) throw new Error('messages invalide');
@@ -286,13 +300,20 @@ export function writeCollections(db, body) {
 
 export function resetAll(db) {
   transaction(db, () => {
-    for (const t of ['manual_items', 'menu_weeks', 'expenses', 'categories', 'charges_fixes', 'stock_items', 'products', 'stock_journal', 'a_racheter', 'price_history', 'recipes', 'messages', 'push_log']) db.exec(`DELETE FROM ${t}`);
+    for (const t of ['manual_items', 'menu_weeks', 'expenses', 'categories', 'charges_fixes', 'stock_items', 'products', 'stock_journal', 'a_racheter', 'price_history', 'recipes', 'messages', 'posts', 'push_log']) db.exec(`DELETE FROM ${t}`);
     db.exec('DELETE FROM settings; DELETE FROM prompt_form; INSERT INTO settings (id) VALUES (1); INSERT INTO prompt_form (id) VALUES (1);');
   });
 }
 
 /* ---------- Messages et recettes publiques ---------- */
 export const messageIds = (db) => new Set(db.prepare('SELECT id FROM messages').all().map((m) => m.id));
+export const readPosts = (db) => db.prepare('SELECT * FROM posts ORDER BY position, rowid').all().map((p) => ({ id: p.id, type: p.type, auteur: p.auteur, texte: p.texte, payload: parse(p.payload, null), date: p.date, at: p.at, epingle: !!p.epingle, reactions: parse(p.reactions, {}), commentaires: parse(p.commentaires, []) }));
+/** Instantané léger des publications, pour repérer ce qui est nouveau après une écriture. */
+export function postsSnapshot(db) {
+  const m = new Map();
+  for (const p of readPosts(db)) m.set(p.id, { auteur: p.auteur, commentaires: new Set(p.commentaires.map((c) => c.id)), reactions: Object.fromEntries(Object.entries(p.reactions).map(([k, v]) => [k, new Set(v)])) });
+  return m;
+}
 export const messageById = (db, id) => db.prepare('SELECT * FROM messages WHERE id = ?').get(id) || null;
 export function publicRecipe(db, shareId) {
   const r = db.prepare('SELECT * FROM recipes WHERE share_id = ?').get(shareId);

@@ -2,7 +2,7 @@
 import { h, icon, money, uid, toast, fmtDate, capitalize, round2, DAYS } from '../utils.js';
 import { getState, update, currentWeek } from '../store.js';
 import { computeBudget } from '../budget.js';
-import { MEAL_OPTIONS, cleanJson, validateMenu, buildPrompt, ecartLineFor, mealCount, coursesTotal } from '../menu-schema.js';
+import { MEAL_OPTIONS, OBJECTIFS, NIVEAUX, cleanJson, validateMenu, buildPrompt, ecartLineFor, mealCount, coursesTotal } from '../menu-schema.js';
 import { openDialog, confirmDialog } from '../components/dialog.js';
 import { openRecipe, mealLabel, openFavoriteRecipe } from '../components/recipe.js';
 import { stockPromptLines } from '../stock.js';
@@ -91,6 +91,13 @@ function promptZone(state, b) {
         h('select', { id: 'p-repas', class: 'input', value: form.repas, onchange: (ev) => setForm('repas', ev.target.value) },
           MEAL_OPTIONS.map((o) => h('option', { value: o.id }, o.label)))),
       textField('p-regime', 'Régime et contraintes', form.regime, (v) => setForm('regime', v), 'Ex. peu de viande rouge, plats à emporter au bureau'),
+      h('div', { class: 'field-row' },
+        h('div', { class: 'field' }, h('label', { for: 'p-objectif' }, 'Priorité de la semaine'),
+          h('select', { id: 'p-objectif', class: 'input', value: form.objectif || 'equilibre', onchange: (ev) => setForm('objectif', ev.target.value) }, OBJECTIFS.map((o) => h('option', { value: o.id }, o.label)))),
+        h('div', { class: 'field' }, h('label', { for: 'p-niveau' }, 'Niveau en cuisine'),
+          h('select', { id: 'p-niveau', class: 'input', value: form.niveau || 'confirme', onchange: (ev) => setForm('niveau', ev.target.value) }, NIVEAUX.map((n) => h('option', { value: n.id }, n.label))))),
+      h('div', { class: 'field' }, h('label', { for: 'p-equip' }, 'Équipement particulier'),
+        h('input', { type: 'text', id: 'p-equip', class: 'input', value: form.equipement || '', placeholder: 'Ex. airfryer, robot cuiseur, pas de four', maxlength: '120', onchange: (ev) => setForm('equipement', ev.target.value) })),
       textField('p-allergies', 'Allergies et aversions', form.allergies, (v) => setForm('allergies', v), 'Ex. arachides, pas de coriandre'),
       placardsField,
       h('label', { class: 'switch' },
@@ -181,7 +188,7 @@ function weekZone(week) {
   const menu = week.menu;
   const section = (title, items) => items.length ? h('section', { class: 'tips' }, h('h2', { class: 'h-section' }, title), h('ul', { class: 'plain-list' }, items.map((t) => h('li', null, t)))) : null;
   return h('div', { class: 'week' },
-    h('h2', { class: 'h-section' }, 'La semaine'),
+    h('div', { class: 'day-head' }, h('h2', { class: 'h-section' }, 'La semaine'), h('button', { type: 'button', class: 'link small', onclick: () => deleteWeek(week) }, 'Supprimer ce menu')),
     h('div', { class: 'day-cards' }, menu.jours.map((d) => dayCard(week, d))),
     section('Batch cooking', menu.batch_cooking),
     section('Restes', menu.restes),
@@ -203,9 +210,21 @@ function mealRow(week, jour, moment, meal) {
     h('span', { class: 'meal-moment' }, capitalize(moment)),
     h('span', { class: 'meal-body' },
       h('span', { class: 'meal-name' }, meal.nom),
-      h('span', { class: 'meal-meta muted small' }, `${meal.temps} min`, meal.tags.length ? ` · ${meal.tags.join(' · ')}` : '', week.cooked?.[`${jour} ${moment}`] ? h('span', { class: 'tag-stock' }, 'cuisiné') : null)),
+      h('span', { class: 'meal-meta muted small' }, `${meal.temps} min`, meal.tags.length ? ` · ${meal.tags.join(' · ')}` : '', isOn('liensRecettes') ? h('span', { class: 'meal-link', title: meal.lien ? 'Recette en ligne' : 'Recherche de la recette en ligne' }, icon('link')) : null, week.cooked?.[`${jour} ${moment}`] ? h('span', { class: 'tag-stock' }, 'cuisiné') : null)),
     icon('chevron', 'meal-chevron'),
   );
+}
+
+/** Supprime une semaine importée (menu, liste et coches). Le ticket déjà enregistré reste dans les dépenses. */
+async function deleteWeek(w) {
+  const ok = await confirmDialog({ title: `Supprimer le menu du ${fmtDate(w.menu.semaine, { day: 'numeric', month: 'long' })} ?`, message: w.validation ? 'Le menu et sa liste disparaissent. La dépense du ticket reste dans tes dépenses.' : 'Le menu et sa liste de courses disparaissent.', confirmLabel: 'Supprimer le menu', danger: true });
+  if (!ok) return false;
+  update((s) => {
+    s.menus.weeks = s.menus.weeks.filter((x) => x.id !== w.id);
+    if (s.menus.currentId === w.id) s.menus.currentId = s.menus.weeks.find((x) => !x.validation)?.id || null;
+  });
+  toast('Menu supprimé');
+  return true;
 }
 
 /* ---------- Historique ---------- */
@@ -225,7 +244,8 @@ function openHistory() {
             v ? [' · ticket ', h('span', { class: 'num' }, money(v.montantReel))] : ' · courses non validées')),
         h('div', { class: 'row-actions' },
           h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => viewWeek(w) }, 'Voir'),
-          isCurrent ? null : h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: async () => { if (await redo(w)) dlg.close(); } }, 'Refaire cette semaine')));
+          isCurrent ? null : h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: async () => { if (await redo(w)) dlg.close(); } }, 'Refaire cette semaine'),
+          h('button', { type: 'button', class: 'btn-icon', 'aria-label': 'Supprimer cette semaine', onclick: async () => { if (await deleteWeek(w)) { dlg.close(); } } }, icon('trash'))));
     })),
   });
 }

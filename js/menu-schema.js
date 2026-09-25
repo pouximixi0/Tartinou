@@ -1,5 +1,5 @@
 // Validation stricte du JSON de menu et assemblage du prompt.
-import { DAYS, nextMonday, todayISO, fmtDate } from './utils.js';
+import { DAYS, nextMonday, todayISO, fmtDate, addDays } from './utils.js';
 
 export const SCHEMA_TEXT = `{
   "semaine": "2026-09-07",
@@ -41,6 +41,8 @@ export function cleanJson(text) {
 const isStr = (v) => typeof v === 'string';
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 export const isUrl = (v) => typeof v === 'string' && /^https?:\/\/[^\s]+$/i.test(v.trim());
+/** Lien de recherche Marmiton pour un plat sans adresse connue. */
+export const searchLinkFor = (nom) => `https://www.marmiton.org/recettes/recherche.aspx?aqt=${encodeURIComponent(String(nom || '').trim()).replace(/%20/g, '+')}`;
 const POUR_RE = new RegExp(`^(${DAYS.join('|')}) (midi|soir)$`);
 
 /**
@@ -143,33 +145,75 @@ function normalize(obj) {
   };
 }
 
-/** Assemble le prompt à coller dans Claude. `ecartLine` est optionnelle. */
+export const OBJECTIFS = [
+  { id: 'equilibre', label: 'Équilibré', phrase: 'des repas équilibrés (légumes à chaque repas, protéines variées, féculents complets quand c\'est possible)' },
+  { id: 'economies', label: 'Économies', phrase: 'le coût le plus bas possible : légumineuses, œufs, produits de saison, marques distributeur, gros conditionnements réutilisés sur plusieurs repas' },
+  { id: 'rapide', label: 'Rapidité', phrase: 'des repas très rapides en semaine (15 à 20 minutes), avec du batch cooking le week-end' },
+  { id: 'antigaspi', label: 'Anti-gaspi', phrase: 'zéro gaspillage : chaque ingrédient acheté est utilisé en entier sur la semaine, les restes sont planifiés' },
+  { id: 'decouverte', label: 'Découverte', phrase: 'de la variété : au moins deux plats que je n\'ai probablement jamais cuisinés, d\'inspirations différentes' },
+];
+export const NIVEAUX = [
+  { id: 'debutant', label: 'Débutant', phrase: 'débutant : techniques simples, pas de matériel spécial, étapes très explicites' },
+  { id: 'confirme', label: 'À l\'aise', phrase: 'à l\'aise en cuisine : recettes courantes sans détailler les bases' },
+  { id: 'expert', label: 'Expérimenté', phrase: 'expérimenté : recettes plus techniques bienvenues le week-end' },
+];
+
+const SAISONS = ['hiver', 'hiver', 'printemps', 'printemps', 'printemps', 'été', 'été', 'été', 'automne', 'automne', 'automne', 'hiver'];
+
+/**
+ * Assemble le prompt à coller dans Claude. `ecartLine` et `extraLines` sont optionnelles ;
+ * opts.liens === false coupe la demande de liens de recettes.
+ */
 export function buildPrompt(form, budget, ecartLine, extraLines = [], opts = {}) {
   const lundi = nextMonday(todayISO());
   const dateLundi = fmtDate(lundi, { day: 'numeric', month: 'long', year: 'numeric' });
-  const repas = (MEAL_OPTIONS.find((o) => o.id === form.repas) || MEAL_OPTIONS[0]).phrase;
+  const option = MEAL_OPTIONS.find((o) => o.id === form.repas) || MEAL_OPTIONS[0];
+  const nbJours = option.id.endsWith('-5') ? 5 : 7;
+  const moments = option.id.startsWith('midi-soir') ? ['midi', 'soir'] : option.id.startsWith('soir') ? ['soir'] : ['midi'];
+  const nbRepas = nbJours * moments.length;
   const or = (v, fallback) => (String(v || '').trim() ? String(v).trim() : fallback);
+  const objectif = OBJECTIFS.find((o) => o.id === form.objectif) || OBJECTIFS[0];
+  const niveau = NIVEAUX.find((n) => n.id === form.niveau) || NIVEAUX[1];
+  const mois = fmtDate(lundi, { month: 'long' });
+  const saison = SAISONS[Number(lundi.slice(5, 7)) - 1];
+  const parPersonne = budget > 0 && nbRepas ? Math.round((Number(budget) / nbRepas / Math.max(1, form.personnes)) * 100) / 100 : null;
+  const jours = DAYS.slice(0, nbJours).map((j, i) => `${j} ${addDays(lundi, i)}`).join(', ');
   const lines = [
-    `Tu es mon assistant cuisine. Génère les menus de la semaine du ${dateLundi} pour ${form.personnes} personnes, avec un budget courses maximum de ${budget} € (ce chiffre vient de mon budget hebdomadaire, ne le dépasse pas).`,
+    `Tu es un cuisinier français pragmatique qui planifie les repas d'un foyer. Tu connais les prix réels des supermarchés français en ${mois} 2026 et les produits de saison (${saison}).`,
     '',
-    `Repas à prévoir : ${repas}.`,
-    `Contraintes et régime : ${or(form.regime, 'aucune')}.`,
-    `Allergies et aversions : ${or(form.allergies, 'aucune')}.`,
-    `Temps de préparation maximum en semaine : ${form.tempsMax} minutes ; le week-end peut être plus long.`,
-    `J'ai déjà dans mes placards : ${or(form.placards, 'rien de particulier')} — n'ajoute pas ces articles à la liste de courses.`,
+    '## Le foyer',
+    `- ${form.personnes} personne${form.personnes > 1 ? 's' : ''}, niveau en cuisine ${niveau.phrase}.`,
+    `- Priorité de la semaine : ${objectif.phrase}.`,
+    `- Contraintes et régime : ${or(form.regime, 'aucune')}.`,
+    `- Allergies et aversions : ${or(form.allergies, 'aucune')} (jamais dans les recettes, même en trace).`,
+    `- Équipement : ${or(form.equipement, 'cuisine classique (plaques, four, poêles, casseroles)')}.`,
+    '',
+    '## La semaine',
+    `- Semaine du ${dateLundi} : ${jours}.`,
+    `- Repas à prévoir : ${option.phrase}, soit ${nbRepas} repas. Les moments non demandés restent à null.`,
+    `- Temps de préparation maximum en semaine : ${form.tempsMax} minutes (le week-end peut aller jusqu'au double).`,
+    `- Budget courses maximum : ${budget} €${parPersonne ? `, soit environ ${String(parPersonne).replace('.', ',')} € par repas et par personne` : ''}. C'est mon budget réel : ne le dépasse pas, et vise 10 % en dessous pour garder une marge.`,
+    `- Déjà à la maison (ne pas racheter, à utiliser en priorité) : ${or(form.placards, 'rien de particulier')}.`,
   ];
-  if (ecartLine) lines.push(ecartLine);
-  for (const l of extraLines) if (l) lines.push(l);
+  if (ecartLine) lines.push(`- ${ecartLine}`);
+  for (const l of extraLines) if (l) lines.push(`- ${l}`);
   lines.push(
     '',
-    'Consignes :',
-    '- Privilégie les produits de saison en France et les prix réalistes des supermarchés français.',
-    "- Réutilise les restes d'un repas à l'autre et propose du batch cooking quand c'est pertinent.",
-    '- Varie les protéines et les féculents sur la semaine.',
-    '- La somme des prix_estime de la liste de courses ne doit pas dépasser le budget.',
-    '- Chaque article de la liste de courses indique dans "pour" les repas qui l\'utilisent.',
-    '- Les recettes sont courtes : 3 à 6 étapes, sans blabla.',
-    opts.liens === false ? '- Laisse "lien" à null.' : '- Pour chaque repas, mets dans "lien" l\'adresse d\'une recette en ligne qui correspond vraiment (Marmiton, 750g, Cuisine AZ, Journal des Femmes…), uniquement si tu es sûr qu\'elle existe ; sinon null.',
+    '## Règles',
+    '1. Un fil conducteur : les gros ingrédients (un poulet, un chou, un kilo de riz…) servent à 2 ou 3 repas différents dans la semaine, avec les restes planifiés dans "restes".',
+    '2. Variété : jamais deux fois la même protéine deux jours de suite, féculents alternés, au moins 2 repas végétariens sur la semaine, pas plus d\'un plat de pâtes.',
+    '3. Chaque repas : légumes présents, portions réalistes pour le nombre de personnes, temps annoncé sincère.',
+    '4. Liste de courses : uniquement ce qui manque, regroupée par rayon d\'un supermarché (Fruits & légumes, Boucherie-poissonnerie, Crèmerie, Épicerie salée, Épicerie sucrée, Surgelés, Boulangerie, Boissons), quantités concrètes ("500 g", "2", "1 boîte de 400 g"), prix_estime réaliste par article, et "pour" qui liste chaque repas qui l\'utilise.',
+    '5. La somme des prix_estime doit rester sous le budget ; si c\'est impossible, simplifie les recettes plutôt que de tricher sur les prix.',
+    '6. Recettes courtes : 3 à 6 étapes numérotées, verbes à l\'impératif, sans blabla, avec les temps de cuisson.',
+    '7. "batch_cooking" : 2 à 4 préparations à faire le week-end qui font gagner du temps en semaine. "conseils" : 1 à 3 astuces concrètes (conservation, promo probable, substitution).',
+    '8. Les tags sont courts et utiles : végé, rapide, froid, à emporter, batch, restes, enfant.',
+    opts.liens === false ? '9. Laisse "lien" à null.' : '9. "lien" est obligatoire pour chaque repas : l\'adresse exacte d\'une recette en ligne que tu connais avec certitude (Marmiton, 750g, Cuisine AZ, Journal des Femmes…). Si tu n\'es pas certain de l\'adresse, mets l\'adresse de recherche Marmiton du plat : https://www.marmiton.org/recettes/recherche.aspx?aqt=nom+du+plat (mots séparés par +). N\'invente jamais une adresse de page.',
+    '',
+    '## Avant de répondre, vérifie',
+    `- ${nbJours} jours exactement, avec les bons noms de jours en minuscules ; ${moments.join(' et ')} rempli${moments.length > 1 ? 's' : ''} pour chaque jour, l'autre moment à null si non demandé.`,
+    '- Aucun allergène listé, aucun article déjà à la maison dans la liste, total sous le budget.',
+    '- JSON strictement valide : guillemets doubles, pas de virgule finale, pas de commentaire.',
     '',
     'Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ni après, sans balises markdown, en respectant exactement ce schéma :',
     '',
@@ -246,7 +290,7 @@ export function buildTonightPrompt({ personnes, tempsMax, regime, allergies }, s
     'Consignes :',
     '- Utilise d\'abord les produits proches de leur date limite, puis le reste du stock ; limite les achats à 3 articles maximum, marqués "en_stock": false.',
     '- Recette courte : 3 à 6 étapes, sans blabla.',
-    '- Dans "lien", l\'adresse d\'une recette en ligne qui correspond vraiment, seulement si tu es sûr qu\'elle existe ; sinon null.',
+    '- "lien" obligatoire : l\'adresse exacte d\'une recette en ligne que tu connais avec certitude, sinon l\'adresse de recherche Marmiton du plat (https://www.marmiton.org/recettes/recherche.aspx?aqt=nom+du+plat). N\'invente jamais une adresse de page.',
     '',
     'Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après, sans balises markdown, selon ce schéma :',
     '',

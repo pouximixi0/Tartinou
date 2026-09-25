@@ -10,6 +10,7 @@ import { detectRecurring, parseBankCsv, matchBankRows, guessCategoryId } from '.
 import { pushSupported, isStandaloneIOS, currentSubscription, subscribeDevice, unsubscribeDevice } from '../push.js';
 import { shareText, inviteUrl } from '../share.js';
 import { MODULE_GROUPS, isOn } from '../modules.js';
+import { avatarEl, fileToAvatar, uploadAvatar, removeAvatar } from '../avatar.js';
 
 export const ALLERGENES = ['lait', 'gluten', 'œufs', 'fruits à coque', 'arachides', 'soja', 'poisson', 'crustacés', 'mollusques', 'céleri', 'moutarde', 'sésame', 'sulfites', 'lupin'];
 
@@ -296,6 +297,7 @@ function accountZone() {
     const f = syncStatus().foyer;
     if (!f) return;
     membersList.replaceChildren(...f.membres.map((m) => h('li', { class: 'row-item' },
+      avatarEl(m.nom),
       h('span', { class: 'row-text' }, m.nom, h('span', { class: 'muted small block' }, `${m.login}${m.role === 'admin' ? ' · administrateur' : ''}`)),
       isAdmin && m.id !== user.id ? h('button', { type: 'button', class: 'btn-icon', 'aria-label': `Retirer ${m.nom}`, onclick: async () => {
         const ok = await confirmDialog({ title: `Retirer ${m.nom} du foyer ?`, message: 'Son compte sera supprimé et ses appareils déconnectés. Les données du foyer restent.', confirmLabel: 'Retirer', danger: true });
@@ -330,7 +332,16 @@ function accountZone() {
   }
 
   return zone('Compte et foyer',
-    user ? h('p', null, h('strong', null, user.nom), h('span', { class: 'muted' }, ` · ${user.login}${isAdmin ? ' · administrateur' : ''}`)) : h('p', { class: 'muted' }, 'Non connecté.'),
+    user ? h('div', { class: 'profile-row' }, avatarEl(user.nom, 'avatar-lg'), h('div', null, h('p', null, h('strong', null, user.nom), h('span', { class: 'muted' }, ` · ${user.login}${isAdmin ? ' · administrateur' : ''}`)),
+      h('div', { class: 'row-actions' },
+        h('input', { type: 'file', accept: 'image/*', class: 'visually-hidden', id: 'avatar-file', onchange: async (ev) => {
+          const f = ev.target.files[0]; ev.target.value = '';
+          if (!f) return;
+          try { const data = await fileToAvatar(f); await uploadAvatar(data); await refreshMe(); toast('Photo de profil mise à jour'); update(() => {}); }
+          catch (e) { toast(e.message || 'Photo refusée'); }
+        } }),
+        h('label', { for: 'avatar-file', class: 'btn btn-secondary btn-sm' }, icon('image'), user.avatar ? 'Changer la photo' : 'Ajouter une photo'),
+        user.avatar ? h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: async () => { try { await removeAvatar(); await refreshMe(); toast('Photo retirée'); update(() => {}); } catch (e) { toast(e.message); } } }, 'Retirer') : null))) : h('p', { class: 'muted' }, 'Non connecté.'),
     foyer ? h('p', null, 'Foyer : ', h('strong', null, foyer.nom), isAdmin ? [' ', h('button', { type: 'button', class: 'link small', onclick: renameFoyer }, 'renommer')] : null) : null,
     codeLine,
     isAdmin ? h('p', { class: 'muted small' }, 'Donne ce code à la personne qui doit rejoindre ton foyer : elle le saisit à l’inscription. ', h('button', { type: 'button', class: 'link small', onclick: async () => { const ok = await confirmDialog({ title: 'Générer un nouveau code ?', message: 'L’ancien code ne fonctionnera plus.', confirmLabel: 'Nouveau code' }); if (!ok) return; try { await api('POST', '/foyer', { nouveauCode: true }); await refreshMe(); drawFoyer(); toast('Nouveau code généré'); } catch (e) { toast(e.message); } } }, 'Générer un nouveau code')) : null,

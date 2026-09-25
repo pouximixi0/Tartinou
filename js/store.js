@@ -10,7 +10,7 @@ import { defaultModules, isOn } from './modules.js';
 export const STORAGE_KEY = 'foyer:v2';
 const LEGACY_KEY = 'foyer:v1';
 export const SCHEMA_VERSION = 2;
-export const COLLECTIONS = ['settings', 'categories', 'expenses', 'menus', 'promptForm', 'recettes', 'stock', 'messages'];
+export const COLLECTIONS = ['settings', 'categories', 'expenses', 'menus', 'promptForm', 'recettes', 'stock', 'posts'];
 
 export const DEFAULT_CATEGORIES = [
   { id: 'courses', nom: 'Courses', couleur: '#3A7D44' },
@@ -44,10 +44,10 @@ export function defaultState() {
     categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
     expenses: [],
     menus: { weeks: [], currentId: null },
-    promptForm: { personnes: 2, budget: '', regime: '', allergies: '', tempsMax: 30, placards: '', repas: 'midi-soir-7', restesDabord: false },
+    promptForm: { personnes: 2, budget: '', regime: '', allergies: '', tempsMax: 30, placards: '', repas: 'midi-soir-7', restesDabord: false, objectif: 'equilibre', niveau: 'confirme', equipement: '' },
     recettes: [],
     stock: { items: [], products: {}, journal: [], aRacheter: [], prixHistorique: [] },
-    messages: [],
+    posts: [],
   };
 }
 
@@ -85,7 +85,11 @@ export function migrate(raw) {
   if (!Array.isArray(out.menus.weeks)) out.menus.weeks = [];
   for (const w of out.menus.weeks) { w.checked = w.checked || {}; w.unavailable = w.unavailable || {}; w.manualItems = w.manualItems || []; w.cooked = w.cooked || {}; }
   if (!Array.isArray(out.recettes)) out.recettes = [];
-  if (!Array.isArray(out.messages)) out.messages = [];
+  if (!Array.isArray(out.posts)) out.posts = [];
+  // Anciens mots du mur (v2.4) : ils deviennent des publications du flux.
+  if (Array.isArray(s.messages) && s.messages.length && !out.posts.length) out.posts = s.messages.map((m) => ({ id: m.id, type: 'message', auteur: m.auteur || null, texte: m.texte, payload: null, date: m.date, at: m.at, epingle: !!m.epingle, reactions: {}, commentaires: [] }));
+  for (const p of out.posts) { p.reactions = p.reactions || {}; p.commentaires = p.commentaires || []; }
+  delete out.messages;
   if (!Array.isArray(out.stock.items)) out.stock.items = [];
   if (!out.stock.products || typeof out.stock.products !== 'object') out.stock.products = {};
   if (!Array.isArray(out.stock.journal)) out.stock.journal = [];
@@ -298,6 +302,8 @@ function startLive() {
   source.addEventListener('change', (ev) => {
     try {
       const msg = JSON.parse(ev.data);
+      if (Array.isArray(msg.written) && msg.written.includes('membres')) { refreshMe().then(() => emit()).catch(() => {}); return; }
+      if (Array.isArray(msg.written) && msg.written.includes('community')) { if (msg.client !== getClientId()) window.dispatchEvent(new CustomEvent('tartinou:community')); return; }
       if (msg.client === getClientId()) return;
       sync.lastRemote = { by: msg.by, at: msg.at };
       pullFromServer();

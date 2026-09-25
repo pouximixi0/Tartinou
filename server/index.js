@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { openDb, readState, writeCollections, resetAll, upsertSubscription, removeSubscription, listSubscriptions, messageIds, messageById, publicRecipe } from './db.js';
+import { openDb, readState, writeCollections, resetAll, upsertSubscription, removeSubscription, listSubscriptions, postsSnapshot, publicRecipe } from './db.js';
 import * as A from './auth.js';
 import { generateVapidKeys } from './webpush.js';
 import { notifyFoyer, broadcast } from './notify.js';
@@ -38,6 +38,7 @@ if (process.argv.includes('--make-token')) {
 
 fs.mkdirSync(FOYERS_DIR, { recursive: true });
 const accounts = A.openAccounts(ACCOUNTS_PATH);
+A.ensureCommunity(accounts);
 
 /* ---------- Clés VAPID ---------- */
 let vapid = A.pushConfig(accounts);
@@ -114,6 +115,8 @@ function tooMany(ip) {
 
 /* ---------- Temps réel (SSE) ---------- */
 const streams = new Map(); // foyerId → Set<res>
+/** Événement pour tous les foyers connectés (flux communauté). */
+function emitAll(payload) { for (const id of streams.keys()) emitChange(id, payload); }
 function emitChange(foyerId, payload) {
   const set = streams.get(foyerId);
   if (!set) return;
@@ -159,7 +162,7 @@ async function handleAuth(req, res, url, route) {
 }
 
 function foyerView(foyer, user) {
-  return { id: foyer.id, nom: foyer.nom, codeInvitation: user.role === 'admin' ? foyer.code_invitation : null, membres: A.membersOfFoyer(accounts, foyer.id).map((m) => ({ id: m.id, nom: m.nom, login: m.login, role: m.role })) };
+  return { id: foyer.id, nom: foyer.nom, codeInvitation: user.role === 'admin' ? foyer.code_invitation : null, membres: A.membersOfFoyer(accounts, foyer.id).map((m) => ({ id: m.id, nom: m.nom, login: m.login, role: m.role, avatar: m.avatar || null })) };
 }
 
 /* ---------- API authentifiée ---------- */
@@ -172,7 +175,7 @@ async function handleApi(req, res, url) {
   }
   if (url.pathname.startsWith('/api/auth/')) {
     if (route === 'POST /api/auth/logout') { A.deleteSession(accounts, bearer(req, url)); return send(res, 200, { ok: true }); }
-    if (route !== 'POST /api/auth/password') return handleAuth(req, res, url, route);
+    if (route !== 'POST /api/auth/password' && route !== 'POST /api/auth/avatar' && route !== 'DELETE /api/auth/avatar') return handleAuth(req, res, url, route);
   }
 
   const token = bearer(req, url);
@@ -193,6 +196,20 @@ async function handleApi(req, res, url) {
     A.deleteUserSessions(accounts, user.id);
     const fresh = A.createSession(accounts, user.id, req.headers['user-agent']);
     return send(res, 200, { ok: true, token: fresh });
+  }
+  if (route === 'POST /api/auth/avatar') {
+    let b; try { b = await readJson(req); } catch (err) { return fail(res, 400, err.message); }
+    const img = String(b.image || '');
+    if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(img)) return fail(res, 400, 'Image attendue en JPEG, PNG ou WebP.');
+    if (img.length > 80000) return fail(res, 400, 'Image trop lourde (60 Ko maximum après réduction).');
+    A.setAvatar(accounts, user.id, img);
+    emitChange(foyer.id, { written: ['membres'], at: Date.now(), by: user.nom, client: '' });
+    return send(res, 200, { ok: true });
+  }
+  if (route === 'DELETE /api/auth/avatar') {
+    A.setAvatar(accounts, user.id, null);
+    emitChange(foyer.id, { written: ['membres'], at: Date.now(), by: user.nom, client: '' });
+    return send(res, 200, { ok: true });
   }
   if (route === 'POST /api/foyer') {
     if (!isAdmin) return fail(res, 403, 'Réservé à l’administrateur du foyer.');
@@ -215,17 +232,11 @@ async function handleApi(req, res, url) {
   if (route === 'PUT /api/state' || route === 'PATCH /api/state') {
     let body; try { body = await readJson(req); } catch (err) { return fail(res, 400, `JSON illisible : ${err.message}`); }
     try {
-      const before = Array.isArray(body.messages) ? messageIds(db) : null;
+      const before = Array.isArray(body.posts) ? postsSnapshot(db) : null;
       const written = writeCollections(db, body);
       const at = Date.now();
       emitChange(foyer.id, { written, at, by: user.nom, client: String(req.headers['x-client-id'] || '') });
-      if (before) {
-        const fresh = body.messages.filter((m) => m && m.id && !before.has(m.id) && m.auteur === user.nom).slice(-3);
-        for (const m of fresh) {
-          const subs = listSubscriptions(db).filter((s) => s.member !== user.nom);
-          notifyMembers(subs, { title: `${user.nom} · mur du foyer`, body: String(m.texte).slice(0, 140), url: '#aujourdhui', tag: `msg-${m.id}` });
-        }
-      }
+      if (before) feedNotifications(db, foyer, user, body.posts, before);
       return send(res, 200, { ok: true, written, at });
     } catch (err) { return fail(res, 400, err.message); }
   }
@@ -244,6 +255,47 @@ async function handleApi(req, res, url) {
     const ping = setInterval(() => { try { res.write(': ping\n\n'); } catch {} }, 25000);
     req.on('close', () => { clearInterval(ping); set.delete(res); });
     return;
+  }
+
+  /* ---- Communauté : flux commun à tous les utilisateurs ---- */
+  if (route === 'GET /api/community') {
+    return send(res, 200, { posts: A.listCommunity(accounts).map((p) => ({ ...p, mine: p.userId === user.id, reactionsIds: undefined, commentaires: p.commentaires.map((c) => ({ id: c.id, auteur: c.auteur, texte: c.texte, at: c.at, mine: c.userId === user.id })) })) });
+  }
+  if (route === 'POST /api/community') {
+    let b; try { b = await readJson(req); } catch (err) { return fail(res, 400, err.message); }
+    const p = A.createCommunityPost(accounts, user, b);
+    if (!p) return fail(res, 400, 'Publication vide.');
+    emitAll({ written: ['community'], at: Date.now(), by: user.nom, client: String(req.headers['x-client-id'] || '') });
+    for (const m of A.usersMentioned(accounts, p.texte)) if (m.id !== user.id) notifyUser(m, { title: `${user.nom} t’a mentionné`, body: p.texte.slice(0, 140), url: '#foyer', tag: `cm-${p.id}` });
+    return send(res, 201, { ok: true, id: p.id });
+  }
+  const cm = url.pathname.match(/^\/api\/community\/([A-Za-z0-9_-]+)(?:\/(react|comment)(?:\/([A-Za-z0-9_-]+))?)?$/);
+  if (cm) {
+    const [, id, action, sub] = cm;
+    const bump = () => emitAll({ written: ['community'], at: Date.now(), by: user.nom, client: String(req.headers['x-client-id'] || '') });
+    if (req.method === 'DELETE' && !action) { if (!A.deleteCommunityPost(accounts, id, user)) return fail(res, 403, 'Seul l’auteur peut supprimer.'); bump(); return send(res, 200, { ok: true }); }
+    if (req.method === 'POST' && action === 'react') {
+      let b; try { b = await readJson(req); } catch (err) { return fail(res, 400, err.message); }
+      const emo = String(b.emoji || '').slice(0, 8);
+      if (!emo) return fail(res, 400, 'Réaction vide.');
+      const r = A.toggleCommunityReaction(accounts, id, emo, user.id);
+      if (!r) return fail(res, 404, 'Publication introuvable.');
+      bump();
+      if (r.added && r.post.user_id !== user.id) { const owner = A.userById(accounts, r.post.user_id); if (owner) notifyUser(owner, { title: `${user.nom} a réagi ${emo}`, body: r.post.texte.slice(0, 100), url: '#foyer', tag: `cr-${id}` }); }
+      return send(res, 200, { ok: true });
+    }
+    if (req.method === 'POST' && action === 'comment') {
+      let b; try { b = await readJson(req); } catch (err) { return fail(res, 400, err.message); }
+      const r = A.addCommunityComment(accounts, id, user, b.texte);
+      if (!r) return fail(res, 400, 'Commentaire vide ou publication introuvable.');
+      bump();
+      const targets = new Set([r.post.user_id, ...r.participants, ...A.usersMentioned(accounts, r.comment.texte).map((m) => m.id)]);
+      targets.delete(user.id);
+      for (const uid of targets) { const u = A.userById(accounts, uid); if (u) notifyUser(u, { title: `${user.nom} a commenté`, body: r.comment.texte.slice(0, 140), url: '#foyer', tag: `cc-${id}` }); }
+      return send(res, 201, { ok: true, id: r.comment.id });
+    }
+    if (req.method === 'DELETE' && action === 'comment' && sub) { if (!A.deleteCommunityComment(accounts, id, sub, user)) return fail(res, 403, 'Commentaire introuvable ou pas à toi.'); bump(); return send(res, 200, { ok: true }); }
+    return fail(res, 404, 'Route inconnue');
   }
 
   if (route === 'GET /api/push/key') return send(res, 200, { publicKey: VAPID.publicKey });
@@ -286,7 +338,7 @@ function recipePage(r, shareId) {
 <h1>${esc(r.nom)}</h1><p class="muted">${r.temps || '?'} min · ${r.personnes || 2} personne${(r.personnes || 2) > 1 ? 's' : ''}${r.tags?.length ? ' · ' + esc(r.tags.join(', ')) : ''} · partagée par ${esc(r.foyer)}</p>
 ${r.ingredients?.length ? `<section class="card"><strong>Ingrédients</strong><ul>${r.ingredients.map((i) => `<li>${esc(i.article)}${i.quantite ? ' · ' + esc(i.quantite) : ''}</li>`).join('')}</ul></section>` : ''}
 <section class="card"><strong>Recette</strong>${steps.length > 1 ? `<ol>${steps.map((s) => `<li>${esc(s.replace(/^\d+[.)]\s*/, ''))}</li>`).join('')}</ol>` : `<p>${esc(r.recette)}</p>`}</section>
-${r.lien ? `<p><a href="${esc(r.lien)}" target="_blank" rel="noopener noreferrer">Voir la recette d'origine</a></p>` : ''}
+<p><a href="${esc(r.lien || `https://www.marmiton.org/recettes/recherche.aspx?aqt=${encodeURIComponent(r.nom).replace(/%20/g, '+')}`)}" target="_blank" rel="noopener noreferrer">${r.lien ? 'Voir la recette d\'origine' : 'Chercher la recette sur Marmiton'}</a></p>
 <a class="btn" href="/#recette=${esc(shareId)}">Ajouter à mes recettes Tartinou</a>
 <p class="muted" style="font-size:.9rem">Tartinou : dépenses, menus et stock alimentaire, sur ton propre serveur.</p></main></body></html>`;
 }
@@ -331,6 +383,54 @@ const server = http.createServer(async (req, res) => {
     return fail(res, 500, 'Erreur interne');
   }
 });
+
+/* ---------- Notifications du flux : publications, commentaires, réactions, mentions ---------- */
+const TYPE_LABEL = { message: 'a écrit', recette: 'a partagé une recette', menu: 'a partagé le menu', liste: 'a partagé la liste de courses' };
+function feedNotifications(db, foyer, user, posts, before) {
+  const members = A.membersOfFoyer(accounts, foyer.id);
+  const subs = listSubscriptions(db);
+  const to = (names) => subs.filter((s) => s.member !== user.nom && (!names || names.includes(s.member)));
+  const mentioned = (texte) => members.filter((m) => m.nom !== user.nom && new RegExp(`@${m.nom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(texte || '')).map((m) => m.nom);
+  let sent = 0;
+  for (const p of posts) {
+    if (!p || !p.id || sent > 6) continue;
+    const old = before.get(p.id);
+    if (!old) {
+      if (p.auteur !== user.nom) continue;
+      const body = p.type === 'message' ? String(p.texte).slice(0, 140) : String(p.texte).replace(/^a partagé une recette : /, '').slice(0, 140);
+      const men = mentioned(p.texte);
+      for (const s of to(null)) {
+        const isMention = men.includes(s.member);
+        notifyMembers([s], { title: isMention ? `${user.nom} t’a mentionné` : `${user.nom} ${TYPE_LABEL[p.type] || 'a publié'}`, body, url: '#foyer', tag: `post-${p.id}` });
+      }
+      sent++;
+      continue;
+    }
+    // Nouveaux commentaires de cette personne.
+    for (const c of p.commentaires || []) {
+      if (!c || old.commentaires.has(c.id) || c.auteur !== user.nom) continue;
+      const others = new Set([old.auteur, ...(p.commentaires || []).map((x) => x.auteur), ...mentioned(c.texte)].filter((n) => n && n !== user.nom));
+      notifyMembers(to([...others]), { title: `${user.nom} a commenté`, body: String(c.texte).slice(0, 140), url: '#foyer', tag: `comm-${p.id}` });
+      sent++;
+    }
+    // Nouvelle réaction de cette personne : on prévient l'auteur de la publication.
+    for (const [emo, names] of Object.entries(p.reactions || {})) {
+      const was = old.reactions[emo] || new Set();
+      if (names.includes(user.nom) && !was.has(user.nom) && old.auteur && old.auteur !== user.nom) {
+        notifyMembers(to([old.auteur]), { title: `${user.nom} a réagi ${emo}`, body: String(p.texte).slice(0, 100), url: '#foyer', tag: `react-${p.id}` });
+        sent++;
+      }
+    }
+  }
+}
+
+/** Notifie tous les appareils d'un utilisateur (ses abonnements vivent dans la base de son foyer). */
+function notifyUser(u, payload) {
+  try {
+    const subs = listSubscriptions(dbFor(u.foyer_id)).filter((s) => s.member === u.nom);
+    if (subs.length) notifyMembers(subs, payload);
+  } catch (err) { console.warn('notifyUser', err.message); }
+}
 
 /* ---------- Notification directe à des abonnés ---------- */
 async function notifyMembers(subs, payload) {
