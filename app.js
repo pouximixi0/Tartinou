@@ -32,6 +32,7 @@ const tabbar = document.getElementById('tabbar');
 const topbar = document.getElementById('topbar');
 const screenTitle = document.getElementById('screen-title');
 const settingsLink = document.getElementById('settings-link');
+const topbarActions = document.getElementById('topbar-actions');
 const syncDot = document.getElementById('sync-dot');
 let lastRoute = null;
 
@@ -112,6 +113,7 @@ function render() {
   document.title = `${route.title} · Tartinou`;
   const hashKey = location.hash.replace(/^#\/?/, '');
   if (hashKey !== key) history.replaceState(null, '', `#${key}`);
+  topbarActions.replaceChildren();
   let content;
   try { content = route.render(); }
   catch (err) { console.error(`Écran ${key}`, err); content = errorScreen(route, err); }

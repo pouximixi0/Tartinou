@@ -136,7 +136,7 @@ Deux portées, en un seul écran :
 
 Depuis une fiche recette, la liste de courses ou la fiche d'un produit du stock, **« Publier »** envoie l'élément dans le fil, pour tout le monde ou pour le foyer, avec un mot d'accompagnement. Un produit partagé s'ajoute au stock d'un autre foyer en un geste.
 
-Le bouton **Membres** liste tous les comptes du serveur groupés par foyer, avec la présence en ligne et un raccourci pour mentionner quelqu'un.
+Le bouton **Membres** en haut de l'écran liste tous les comptes du serveur groupés par foyer, avec la présence en ligne et un raccourci pour mentionner quelqu'un.
 
 Sur les deux : **réactions** (❤️ 👍 😋 😂 👏), **commentaires**, **mentions** `@prénom` qui notifient la personne, suppression par l'auteur, badge de non-lus sur l'onglet Communauté. Une recette partagée s'ajoute aux favoris ou au menu en un geste ; chaque recette a aussi une **page publique** `/p/r/<id>` importable par lien.
 

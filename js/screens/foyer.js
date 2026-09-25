@@ -30,9 +30,10 @@ export function renderFoyer() {
     [['tous', 'Tout le monde'], ['foyer', 'Mon foyer']].map(([id, label]) => h('label', { class: 'seg' },
       h('input', { type: 'radio', name: 'portee', value: id, checked: ui.portee === id, onchange: () => { ui.portee = id; draw(); startLiveFeed(); } }), h('span', null, label))));
   const body = h('div', { class: 'feed-body' });
-  const tools = h('div', { class: 'feed-tools' },
-    h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => openMembers(me, (nom) => { ui.draft = `${ui.draft.trim()} @${nom} `.trimStart(); draw(); body.querySelector('textarea')?.focus(); }) }, icon('users'), 'Membres'));
-  root.append(seg, tools, body);
+  // Bouton « Membres » dans la barre du haut, à côté des réglages.
+  const membersBtn = h('button', { type: 'button', class: 'btn-icon', 'aria-label': 'Membres de l’application', title: 'Membres', onclick: () => openMembers(me, (nom) => { ui.draft = `${ui.draft.trim()} @${nom} `.trimStart(); draw(); body.querySelector('textarea')?.focus(); }) }, icon('users'));
+  document.getElementById('topbar-actions')?.replaceChildren(membersBtn);
+  root.append(seg, body);
 
   let unsub = null, timer = null, deferred = false;
   function stopLiveFeed() { if (unsub) { unsub(); unsub = null; } if (timer) { clearInterval(timer); timer = null; } }
@@ -61,14 +62,14 @@ export function renderFoyer() {
 /* ---------- Annuaire : tous les comptes du serveur, groupés par foyer ---------- */
 function openMembers(me, onMention) {
   const list = h('div', { class: 'members-list' }, h('p', { class: 'muted small' }, 'Chargement…'));
-  const dlg = openDialog({ title: ui.portee === 'foyer' ? 'Membres de mon foyer' : 'Membres de la communauté', cls: 'sheet-compact', content: list });
-  loadMembers().then((all) => {
-    const membres = ui.portee === 'foyer' ? all.filter((m) => m.monFoyer) : all;
+  const dlg = openDialog({ title: 'Membres de Tartinou', cls: 'sheet-compact', content: list });
+  loadMembers().then((membres) => {
+    // Tous les comptes du serveur, mon foyer en premier.
     const groups = new Map();
-    for (const m of membres) (groups.get(m.foyer) || groups.set(m.foyer, []).get(m.foyer)).push(m);
+    for (const m of [...membres].sort((a, b) => Number(b.monFoyer) - Number(a.monFoyer))) (groups.get(m.foyer) || groups.set(m.foyer, []).get(m.foyer)).push(m);
     const enLigne = membres.filter((m) => m.enLigne).length;
     list.replaceChildren(
-      h('p', { class: 'muted small' }, `${membres.length} membre${membres.length > 1 ? 's' : ''} · ${enLigne} en ligne`),
+      h('p', { class: 'muted small' }, `${membres.length} membre${membres.length > 1 ? 's' : ''} sur ce serveur, ${groups.size} foyer${groups.size > 1 ? 's' : ''} · ${enLigne} en ligne`),
       ...[...groups].map(([foyer, ms]) => h('section', null,
         h('h3', { class: 'h-small' }, foyer, ms.some((m) => m.monFoyer) ? h('span', { class: 'muted' }, ' · mon foyer') : null),
         h('ul', { class: 'rows' }, ms.map((m) => h('li', { class: 'row-item member-row' },
