@@ -5,7 +5,7 @@
 import { h, icon, toast, uid, todayISO, capitalize, DAYS, fmtDate } from '../utils.js';
 import { getState, update, currentUser, currentWeek } from '../store.js';
 import { REACTIONS, createPost, toggleReaction, addComment, removeComment, removePost, togglePin, sortedPosts, splitMentions, activityFeed, relativeTime } from '../social.js';
-import { communityPosts, loadCommunity, onCommunity, postCommunity, reactCommunity, commentCommunity, deleteCommunityComment, deleteCommunityPost } from '../community.js';
+import { communityPosts, loadCommunity, onCommunity, postCommunity, reactCommunity, commentCommunity, deleteCommunityComment, deleteCommunityPost, loadMembers } from '../community.js';
 import { openDialog, confirmDialog } from '../components/dialog.js';
 import { openFavoriteRecipe } from '../components/recipe.js';
 import { shareText, menuText, shoppingListText, recipeText } from '../share.js';
@@ -30,7 +30,9 @@ export function renderFoyer() {
     [['tous', 'Tout le monde'], ['foyer', 'Mon foyer']].map(([id, label]) => h('label', { class: 'seg' },
       h('input', { type: 'radio', name: 'portee', value: id, checked: ui.portee === id, onchange: () => { ui.portee = id; draw(); startLiveFeed(); } }), h('span', null, label))));
   const body = h('div', { class: 'feed-body' });
-  root.append(seg, body);
+  const tools = h('div', { class: 'feed-tools' },
+    h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => openMembers(me, (nom) => { ui.draft = `${ui.draft.trim()} @${nom} `.trimStart(); draw(); body.querySelector('textarea')?.focus(); }) }, icon('users'), 'Membres'));
+  root.append(seg, tools, body);
 
   let unsub = null, timer = null, deferred = false;
   function stopLiveFeed() { if (unsub) { unsub(); unsub = null; } if (timer) { clearInterval(timer); timer = null; } }
@@ -54,6 +56,27 @@ export function renderFoyer() {
   draw();
   startLiveFeed();
   return root;
+}
+
+/* ---------- Annuaire : tous les comptes du serveur, groupés par foyer ---------- */
+function openMembers(me, onMention) {
+  const list = h('div', { class: 'members-list' }, h('p', { class: 'muted small' }, 'Chargement…'));
+  const dlg = openDialog({ title: ui.portee === 'foyer' ? 'Membres de mon foyer' : 'Membres de la communauté', cls: 'sheet-compact', content: list });
+  loadMembers().then((all) => {
+    const membres = ui.portee === 'foyer' ? all.filter((m) => m.monFoyer) : all;
+    const groups = new Map();
+    for (const m of membres) (groups.get(m.foyer) || groups.set(m.foyer, []).get(m.foyer)).push(m);
+    const enLigne = membres.filter((m) => m.enLigne).length;
+    list.replaceChildren(
+      h('p', { class: 'muted small' }, `${membres.length} membre${membres.length > 1 ? 's' : ''} · ${enLigne} en ligne`),
+      ...[...groups].map(([foyer, ms]) => h('section', null,
+        h('h3', { class: 'h-small' }, foyer, ms.some((m) => m.monFoyer) ? h('span', { class: 'muted' }, ' · mon foyer') : null),
+        h('ul', { class: 'rows' }, ms.map((m) => h('li', { class: 'row-item member-row' },
+          h('span', { class: `avatar-wrap${m.enLigne ? ' is-online' : ''}` }, avatarEl(m.nom, '', m.avatar)),
+          h('span', { class: 'row-text' }, m.nom, m.moi ? h('span', { class: 'muted' }, ' (moi)') : null,
+            h('span', { class: 'muted small block' }, [m.role === 'admin' ? 'Administrateur' : 'Membre', m.enLigne ? 'en ligne' : null, `depuis le ${fmtDate(new Date(m.depuis || Date.now()).toISOString().slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' })}`].filter(Boolean).join(' · '))),
+          !m.moi ? h('button', { type: 'button', class: 'btn-icon btn-icon-sm', 'aria-label': `Mentionner ${m.nom}`, title: 'Mentionner dans un message', onclick: () => { dlg.close(); onMention(m.nom); } }, icon('message')) : null))))));
+  }).catch((e) => list.replaceChildren(h('p', { class: 'muted small' }, e.message || 'Liste indisponible')));
 }
 
 /* ---------- Portée « Tout le monde » ---------- */

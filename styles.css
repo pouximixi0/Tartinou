@@ -615,6 +615,11 @@ dialog.sheet-compact::before { content: ''; display: block; width: 36px; height:
 .product-card .recipe-card-main { cursor: default; }
 .product-card-img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: var(--surface); flex: 0 0 auto; }
 .sheet-head-tools { display: flex; gap: 2px; margin-left: auto; }
+.feed-tools { display: flex; justify-content: flex-end; margin-top: -8px; }
+.member-row { padding-left: 4px; }
+.avatar-wrap { position: relative; display: inline-flex; flex: 0 0 auto; }
+.avatar-wrap.is-online::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 50%; background: var(--cuisine); border: 2px solid var(--surface); }
+.members-list section { margin-top: 12px; }
 .publish-preview { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface-2); border-radius: var(--r); }
 .publish-preview svg { width: 20px; height: 20px; flex: 0 0 auto; }
 .feed-act { display: flex; align-items: center; gap: 10px; padding: 6px 14px; color: var(--muted); font-size: 0.9rem; }

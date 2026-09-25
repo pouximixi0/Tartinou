@@ -18,6 +18,7 @@ export async function postCommunity(data) { await api('POST', '/community', data
 export async function reactCommunity(id, emoji) { await api('POST', `/community/${id}/react`, { emoji }); return loadCommunity(); }
 export async function commentCommunity(id, texte) { await api('POST', `/community/${id}/comment`, { texte }); return loadCommunity(); }
 export async function deleteCommunityComment(id, cid) { await api('DELETE', `/community/${id}/comment/${cid}`); return loadCommunity(); }
+export const loadMembers = () => api('GET', '/community/membres').then((r) => r.membres || []);
 export async function deleteCommunityPost(id) { await api('DELETE', `/community/${id}`); return loadCommunity(); }
 
 // Un autre appareil a publié : on recharge si quelqu'un écoute.

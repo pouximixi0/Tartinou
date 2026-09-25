@@ -101,6 +101,8 @@ export function sessionUser(db, token) {
 export const deleteSession = (db, token) => db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
 export const deleteUserSessions = (db, userId) => db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
 
+/** Tous les utilisateurs du serveur avec le nom de leur foyer (pour l'annuaire de la communauté). */
+export const listAllUsers = (db) => db.prepare('SELECT u.id, u.nom, u.login, u.role, u.avatar, u.created_at, u.foyer_id, f.nom AS foyer FROM users u JOIN foyers f ON f.id = u.foyer_id ORDER BY f.rowid, u.created_at').all();
 export const publicUser = (u) => ({ id: u.id, login: u.login, nom: u.nom, role: u.role, avatar: u.avatar || null });
 
 /* ---------- Clés VAPID (globales au serveur) ---------- */

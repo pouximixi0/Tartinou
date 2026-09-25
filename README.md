@@ -136,6 +136,8 @@ Deux portées, en un seul écran :
 
 Depuis une fiche recette, la liste de courses ou la fiche d'un produit du stock, **« Publier »** envoie l'élément dans le fil, pour tout le monde ou pour le foyer, avec un mot d'accompagnement. Un produit partagé s'ajoute au stock d'un autre foyer en un geste.
 
+Le bouton **Membres** liste tous les comptes du serveur groupés par foyer, avec la présence en ligne et un raccourci pour mentionner quelqu'un.
+
 Sur les deux : **réactions** (❤️ 👍 😋 😂 👏), **commentaires**, **mentions** `@prénom` qui notifient la personne, suppression par l'auteur, badge de non-lus sur l'onglet Communauté. Une recette partagée s'ajoute aux favoris ou au menu en un geste ; chaque recette a aussi une **page publique** `/p/r/<id>` importable par lien.
 
 <br clear="all">
@@ -276,6 +278,7 @@ Toutes les routes sauf `health`, `auth/register`, `auth/login` et `public/*` exi
 | `PUT /api/state` | `{ expenses: […], stock: {…} }` : chaque collection présente remplace la sienne, en transaction ; les autres appareils reçoivent un événement. |
 | `GET /api/events?token=…` | Flux SSE : `state` (collections écrites), `membres`, `community`. |
 | `GET /api/community` | Le fil commun (publications, réactions, commentaires). |
+| `GET /api/community/membres` | Tous les comptes du serveur, avec foyer et présence en ligne. |
 | `POST /api/community` | Publie un message, une recette, un menu ou une liste. |
 | `POST /api/community/:id/react` · `comment` | Réaction (bascule) et commentaire. |
 | `DELETE /api/community/:id` · `/comment/:cid` | Suppression par l'auteur. |

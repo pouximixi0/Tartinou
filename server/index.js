@@ -251,6 +251,7 @@ async function handleApi(req, res, url) {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     res.write('retry: 5000\n\n');
     const set = streams.get(foyer.id) || streams.set(foyer.id, new Set()).get(foyer.id);
+    res.userId = user.id;
     set.add(res);
     const ping = setInterval(() => { try { res.write(': ping\n\n'); } catch {} }, 25000);
     req.on('close', () => { clearInterval(ping); set.delete(res); });
@@ -258,6 +259,11 @@ async function handleApi(req, res, url) {
   }
 
   /* ---- Communauté : flux commun à tous les utilisateurs ---- */
+  if (route === 'GET /api/community/membres') {
+    const online = new Set();
+    for (const set of streams.values()) for (const r of set) if (r.userId) online.add(r.userId);
+    return send(res, 200, { membres: A.listAllUsers(accounts).map((u) => ({ id: u.id, nom: u.nom, login: u.login, role: u.role, avatar: u.avatar || null, foyer: u.foyer, foyerId: u.foyer_id, monFoyer: u.foyer_id === foyer.id, moi: u.id === user.id, enLigne: online.has(u.id), depuis: u.created_at })) });
+  }
   if (route === 'GET /api/community') {
     return send(res, 200, { posts: A.listCommunity(accounts).map((p) => ({ ...p, mine: p.userId === user.id, reactionsIds: undefined, commentaires: p.commentaires.map((c) => ({ id: c.id, auteur: c.auteur, texte: c.texte, at: c.at, mine: c.userId === user.id })) })) });
   }
