@@ -5,18 +5,38 @@ const API = 'https://prices.openfoodfacts.org/api/v1/prices';
 const POS_KEY = 'foyer:position';
 const cache = new Map();
 
-export async function fetchOpenPrices(code) {
-  const key = String(code || '').trim();
-  if (!key) return [];
-  if (cache.has(key)) return cache.get(key);
-  // L'API ne filtre pas par distance : on ramène jusqu'à 300 relevés récents (3 pages) puis on trie ici.
+async function pages(query, maxPages) {
   const items = [];
-  for (let page = 1; page <= 3; page++) {
-    const res = await fetch(`${API}?product_code=${encodeURIComponent(key)}&size=100&page=${page}&order_by=-date`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(9000) });
+  for (let page = 1; page <= maxPages; page++) {
+    const res = await fetch(`${API}?${query}&size=100&page=${page}&order_by=-date`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(9000) });
     if (!res.ok) { if (page === 1) throw new Error(`Open Prices répond ${res.status}`); break; }
     const data = await res.json();
     items.push(...(data.items || []));
     if (!data.pages || page >= data.pages) break;
+  }
+  return items;
+}
+
+/**
+ * Relevés pour un code-barres. Avec une position : d'abord les magasins dans un rayon de 15 km
+ * (puis 60 km s'il y en a peu) grâce au filtre de proximité de l'API, complétés par les relevés
+ * récents ; sans position : les 300 relevés les plus récents.
+ */
+export async function fetchOpenPrices(code, pos = null) {
+  const code_ = String(code || '').trim();
+  if (!code_) return [];
+  const key = pos ? `${code_}@${pos.lat.toFixed(2)},${pos.lon.toFixed(2)}` : code_;
+  if (cache.has(key)) return cache.get(key);
+  const q = `product_code=${encodeURIComponent(code_)}`;
+  const items = [];
+  if (pos) {
+    const near = (r) => pages(`${q}&lat=${pos.lat}&lon=${pos.lon}&radius_km=${r}`, 2);
+    let nearby = await near(15);
+    if (new Set(nearby.map((p) => p.location_id)).size < 5) nearby = nearby.concat(await near(60));
+    items.push(...nearby);
+    try { items.push(...await pages(q, 1)); } catch {}
+  } else {
+    items.push(...await pages(q, 3));
   }
   const byLoc = new Map();
   for (const p of items) {

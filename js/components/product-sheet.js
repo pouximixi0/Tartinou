@@ -183,27 +183,27 @@ export function openProductSheet({ code = null, product = null, item = null, def
   /* ---- Prix relevés par d'autres (Open Prices), triés par distance ---- */
   const pricesBox = h('div', { class: 'open-prices', hidden: true });
   let openPrices = null, pricesCode = null;
-  async function loadOpenPrices() {
-    if (!d.code || !isOn('prixOpen') || pricesCode === d.code) return;
+  async function loadOpenPrices(force = false) {
+    if (!d.code || !isOn('prixOpen') || (!force && pricesCode === d.code)) return;
     pricesCode = d.code;
     pricesBox.hidden = false;
-    pricesBox.replaceChildren(h('p', { class: 'muted small' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), ' Prix relevés en magasin (Open Prices)…'));
-    try { openPrices = await fetchOpenPrices(d.code); }
+    pricesBox.replaceChildren(h('p', { class: 'muted small' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), ' Prix relevés en magasin près de toi (Open Prices)…'));
+    // Position déjà autorisée sur l'appareil : on la rafraîchit sans rien demander, pour chercher les magasins proches d'office.
+    if ((!savedPosition() || Date.now() - savedPosition().at > 86400000) && await positionGranted()) { try { await askPosition(); } catch {} }
+    try { openPrices = await fetchOpenPrices(d.code, savedPosition()); }
     catch { if (!closed) pricesBox.hidden = true; return; }
-    if (closed || pricesCode !== d.code) return;
-    // Position déjà autorisée sur l'appareil : on la rafraîchit sans rien demander, pour trier par distance d'office.
-    if (openPrices.length && (!savedPosition() || Date.now() - savedPosition().at > 86400000) && await positionGranted()) { try { await askPosition(); } catch {} }
     if (!closed && pricesCode === d.code) drawOpenPrices();
   }
   function drawOpenPrices() {
     if (!openPrices || !openPrices.length) { pricesBox.replaceChildren(h('p', { class: 'muted small' }, 'Aucun prix relevé pour ce produit sur Open Prices.')); return; }
     const pos = savedPosition();
     const sorted = sortPrices(openPrices, pos).slice(0, 6);
-    const locate = async () => { try { await askPosition(); drawOpenPrices(); } catch (e) { toast(e.message); } };
+    const locate = async () => { try { await askPosition(); loadOpenPrices(true); } catch (e) { toast(e.message); } };
     pricesBox.replaceChildren(
       h('p', { class: 'muted small open-prices-head' }, `${openPrices.length} prix relevé${openPrices.length > 1 ? 's' : ''} en magasin (Open Prices)${pos ? ', du plus proche au plus loin' : ', les plus récents'}`,
         pos ? [' · ', h('button', { type: 'button', class: 'link small', onclick: locate }, icon('pin'), 'Actualiser ma position')] : null),
       pos ? null : h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: locate }, icon('pin'), 'Trier par distance (près de moi)'),
+      pos && sorted[0]?.km > 60 ? h('p', { class: 'muted small' }, 'Aucun relevé à moins de 60 km de toi : voici les plus proches quand même.') : null,
       h('div', { class: 'chips chips-sm' }, sorted.map((p) => h('button', { type: 'button', class: 'chip chip-sm chip-price', title: `Relevé le ${fmtDate(p.date, { day: 'numeric', month: 'long', year: 'numeric' })}`, onclick: () => {
         d.prix = p.prix; prixInput.value = String(p.prix).replace('.', ',');
         if (isOn('prixHistorique')) { d.magasin = p.magasin; magasinInput.value = p.magasin; }
