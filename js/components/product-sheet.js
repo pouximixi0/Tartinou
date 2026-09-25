@@ -218,7 +218,7 @@ export function openProductSheet({ code = null, product = null, item = null, def
       });
       setTimeout(() => input.focus(), 50);
     };
-    pricesBox.replaceChildren(
+    pricesBox.replaceChildren(...[
       h('p', { class: 'muted small open-prices-head' }, `${openPrices.length} prix relevé${openPrices.length > 1 ? 's' : ''} en magasin (Open Prices)${pos ? ` près de ${positionLabel(pos)}` : ', les plus récents'}`,
         pos ? [' · ', h('button', { type: 'button', class: 'link small', onclick: changePosition }, icon('pin'), 'Changer')] : null),
       pos ? null : h('div', { class: 'row-actions' },
@@ -230,7 +230,8 @@ export function openProductSheet({ code = null, product = null, item = null, def
         d.prix = p.prix; prixInput.value = String(p.prix).replace('.', ',');
         if (isOn('prixHistorique')) { d.magasin = p.magasin; magasinInput.value = p.magasin; }
         drawPrixHint(); toast(`${money(p.prix)} chez ${p.magasin}`);
-      } }, h('strong', { class: 'num' }, money(p.prix)), ` ${p.magasin}${p.ville ? `, ${p.ville}` : ''}`, h('span', { class: 'muted' }, p.km != null ? ` · ${fmtKm(p.km)}` : ` · ${fmtDate(p.date, { month: 'short', year: '2-digit' })}`)))));
+      } }, h('strong', { class: 'num' }, money(p.prix)), ` ${p.magasin}${p.ville ? `, ${p.ville}` : ''}`, h('span', { class: 'muted' }, p.km != null ? ` · ${fmtKm(p.km)}` : ` · ${fmtDate(p.date, { month: 'short', year: '2-digit' })}`)))),
+    ].filter((x) => x != null));
   }
   function drawPrixHint() {
     const p = prixInput.value.trim() ? parseAmount(prixInput.value) : null;
